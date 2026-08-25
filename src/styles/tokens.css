@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  /* ---- Brand ---- */
+  --abza-red: #E00E0F;
+  --abza-red-700: #A80B0C;
+  --abza-red-600: #C40C0D;
+  --abza-red-500: #E00E0F;
+  --abza-red-400: #EE3D3E;
+  --abza-red-300: #F47172;
+  --abza-red-200: #FAB6B6;
+  --abza-red-100: #FDE3E3;
+  --abza-red-50: #FEF2F2;
+
+  /* ---- Neutrals ---- */
+  --ink-950: #0E0F12;
+  --ink-900: #17181C;
+  --ink-800: #242529;
+  --ink-700: #34363D;
+  --ink-600: #4B4E56;
+  --ink-500: #6C6F78;
+  --ink-400: #9A9DA4;
+  --ink-300: #C2C4C9;
+  --ink-200: #DEDFE3;
+  --ink-150: #E7E8EB;
+  --ink-100: #EFF0F2;
+  --ink-50: #F7F8F9;
+  --white: #FFFFFF;
+
+  /* ---- Support ---- */
+  --support-green: #1F9D6B;
+  --support-amber: #E8A317;
+  --support-blue: #3B6FE0;
+
+  --color-bg: var(--white);
+  --color-accent-hover: var(--abza-red-600);
+  --color-accent-press: var(--abza-red-700);
+  --color-accent-soft: var(--abza-red-50);
+  --focus-ring: 0 0 0 3px rgba(224,14,15,.35);
+  --link: var(--abza-red);
+  --link-hover: var(--abza-red-700);
+
+  /* ---- Fonts ---- */
+  --font-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --font-text: 'Manrope', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, 'SFMono-Regular', monospace;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-extrabold: 800;
+
+  /* ---- Radii / shadows / motion ---- */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius-pill: 999px;
+
+  --shadow-xs: 0 1px 2px rgba(15,16,20,.06);
+  --shadow-sm: 0 2px 6px rgba(15,16,20,.08);
+  --shadow-md: 0 8px 24px rgba(15,16,20,.10);
+  --shadow-lg: 0 18px 48px rgba(15,16,20,.14);
+  --shadow-xl: 0 32px 80px rgba(15,16,20,.20);
+  --shadow-red: 0 12px 36px rgba(224,14,15,.32);
+  --shadow-red-sm: 0 4px 16px rgba(224,14,15,.28);
+
+  --ease-standard: cubic-bezier(.22,.61,.36,1);
+  --ease-out: cubic-bezier(.16,1,.3,1);
+  --ease-in-out: cubic-bezier(.65,0,.35,1);
+}
