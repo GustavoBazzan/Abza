@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sidebar } from './sections/Sidebar';
+import { MobileNav } from './sections/MobileNav';
 import { Hero } from './sections/Hero';
 import { Philosophy } from './sections/Philosophy';
 import { Anatomy } from './sections/Anatomy';
@@ -61,6 +62,19 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const modalOpen = techIdx !== null || objIdx !== null;
+  useEffect(() => {
+    if (!modalOpen) return;
+    const scrollY = window.scrollY;
+    document.body.classList.add('modal-open');
+    document.body.style.top = `-${scrollY}px`;
+    return () => {
+      document.body.classList.remove('modal-open');
+      document.body.style.top = '';
+      window.scrollTo(0, scrollY);
+    };
+  }, [modalOpen]);
+
   const goTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   const goTechniques = () => scrollToId('s03');
   const goExplore = () => scrollToId('s01');
@@ -70,6 +84,7 @@ export default function App() {
       <Sidebar active={active} progress={progress} onNavigate={scrollToId} />
 
       <main className="main">
+        <MobileNav active={active} progress={progress} onNavigate={scrollToId} />
         <Hero onExplore={goExplore} onTechniques={goTechniques} />
         <Philosophy />
         <Anatomy />

@@ -22,15 +22,17 @@ export function Objections({ step, onHoverStep, onOpenObjection }: ObjectionsPro
 
         <div className="movimentos-grid">
           {METODO.map((m, i) => (
-            <div
+            <button
+              type="button"
               key={m.n}
               className={`movimento-card${i === step ? ' active' : ''}`}
               onMouseEnter={() => onHoverStep(i)}
+              onClick={() => onHoverStep(i)}
             >
               <span className="movimento-card-n">{m.n}</span>
               <span className="movimento-card-nome">{m.nome}</span>
               <span className="movimento-card-desc">{m.desc}</span>
-            </div>
+            </button>
           ))}
         </div>
 

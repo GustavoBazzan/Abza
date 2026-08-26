@@ -1,7 +1,8 @@
 @import './tokens.css';
 
-*, *::before, *::after { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; min-width: 0; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+html, body { overscroll-behavior-y: none; }
 body {
   margin: 0;
   background: #FAF9F7;
@@ -11,7 +12,18 @@ body {
   color: var(--ink-900);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overflow-wrap: break-word;
 }
+/* Applied to <body> while a modal is open, to stop the page behind it from
+   scrolling on touch (iOS Safari doesn't respect overflow:hidden on body
+   alone once a touchmove starts inside a fixed overlay). */
+body.modal-open {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  overflow: hidden;
+}
+button, a, [role="button"] { touch-action: manipulation; }
 h1, h2, h3, h4 { font-family: var(--font-display); margin: 0; }
 p { margin: 0; }
 a { color: var(--abza-red); text-decoration: none; }
