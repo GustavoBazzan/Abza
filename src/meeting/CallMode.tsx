@@ -1,62 +1,36 @@
 import { useEffect, useState } from 'react';
-import { getScript, type ResponseOption } from '../data/scripts';
-import type { MeetingSession } from './useMeetingSession';
+import { getProduct } from '../data/products';
+import { useActiveMeeting } from './useMeetingStore';
 import { TechniqueCallout } from './TechniqueCallout';
-import { NotesDrawer } from './NotesDrawer';
-import { QuickHelpDrawer } from './QuickHelpDrawer';
-import { ExitChecklist } from './ExitChecklist';
+import { ObjectionOverlay } from './ObjectionOverlay';
+import { CopilotPanel } from './CopilotPanel';
+import { IntroStage } from './stages/IntroStage';
+import { QuestionsStage } from './stages/QuestionsStage';
+import { QualificationStage } from './stages/QualificationStage';
+import { DiagnosisStage } from './stages/DiagnosisStage';
+import { DiagnosisReturnStage } from './stages/DiagnosisReturnStage';
+import { AbzaIntroStage } from './stages/AbzaIntroStage';
+import { SolutionStage } from './stages/SolutionStage';
+import { ScopeStage } from './stages/ScopeStage';
+import { PricingStage } from './stages/PricingStage';
+import { ClosingStage } from './stages/ClosingStage';
 
 interface CallModeProps {
-  scriptId: string;
+  productId: string;
+  meetingId: string;
   navigate: (path: string) => void;
-  session: MeetingSession;
 }
 
-function ResponseOptionPicker({ options, selected, onSelect }: { options: ResponseOption[]; selected?: string; onSelect: (label: string) => void }) {
-  const active = options.find((o) => o.label === selected);
-  return (
-    <div className="call-block">
-      <div className="call-response-grid">
-        {options.map((o) => (
-          <button
-            key={o.label}
-            type="button"
-            className={`call-response-option${o.label === selected ? ' active' : ''}`}
-            onClick={() => onSelect(o.label)}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
-      {active && (
-        <div className="call-response-guidance">
-          <p>{active.guidance}</p>
-        </div>
-      )}
-    </div>
-  );
-}
+export function CallMode({ productId, meetingId, navigate }: CallModeProps) {
+  const product = getProduct(productId);
+  const { meeting, loading, saveStatus, update, flush } = useActiveMeeting(meetingId);
 
-export function CallMode({ scriptId, navigate, session }: CallModeProps) {
-  const script = getScript(scriptId);
-  const { meeting } = session;
+  const [objectionOpen, setObjectionOpen] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
 
+  const anyOverlayOpen = objectionOpen || copilotOpen;
   useEffect(() => {
-    if (!meeting || meeting.scriptId !== scriptId || meeting.endedAt) {
-      session.start(scriptId);
-    }
-    // Only re-run when the target script changes, not on every meeting update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scriptId]);
-
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [quickHelpOpen, setQuickHelpOpen] = useState(false);
-  const [checklistOpen, setChecklistOpen] = useState(false);
-  const [checkedQuestions, setCheckedQuestions] = useState<Record<number, boolean>>({});
-
-  const anyDrawerOpen = notesOpen || quickHelpOpen || checklistOpen;
-  useEffect(() => {
-    if (!anyDrawerOpen) return;
+    if (!anyOverlayOpen) return;
     const scrollY = window.scrollY;
     document.body.classList.add('modal-open');
     document.body.style.top = `-${scrollY}px`;
@@ -65,133 +39,126 @@ export function CallMode({ scriptId, navigate, session }: CallModeProps) {
       document.body.style.top = '';
       window.scrollTo(0, scrollY);
     };
-  }, [anyDrawerOpen]);
+  }, [anyOverlayOpen]);
 
-  if (!script) {
+  function onViewTechnique(num: string) {
+    update((m) => (m.techniquesViewed.includes(num) ? m : { ...m, techniquesViewed: [...m.techniquesViewed, num] }));
+  }
+
+  if (!product || product.comingSoon) {
     return (
       <div className="meeting-shell">
-        <p className="meeting-empty-state">Script não encontrado.</p>
-        <button type="button" className="meeting-back-link" onClick={() => navigate('/scripts')}>← Voltar</button>
+        <p className="meeting-empty-state">Roteiro não encontrado.</p>
+        <button type="button" className="meeting-back-link" onClick={() => navigate('/scripts')}>← Scripts de Reunião</button>
       </div>
     );
   }
 
-  if (!meeting || meeting.scriptId !== scriptId || meeting.endedAt) return null;
+  if (loading) return null;
 
-  const stepIndex = Math.min(meeting.currentStepIndex, script.steps.length - 1);
-  const step = script.steps[stepIndex];
-  const total = script.steps.length;
-  const isLast = stepIndex === total - 1;
+  if (!meeting) {
+    return (
+      <div className="meeting-shell">
+        <p className="meeting-empty-state">Essa reunião não foi encontrada — pode já ter sido encerrada em outro dispositivo, ou o link expirou.</p>
+        <button type="button" className="meeting-back-link" onClick={() => navigate(`/scripts/${productId}`)}>← Iniciar nova reunião</button>
+      </div>
+    );
+  }
 
+  const stages = product.stages;
+  const stageIndex = Math.min(meeting.currentStageIndex, stages.length - 1);
+  const stage = stages[stageIndex];
+  const total = stages.length;
+  const isLast = stageIndex === total - 1;
+
+  function goTo(index: number) {
+    update((m) => ({ ...m, currentStageIndex: index }));
+  }
   function goNext() {
-    if (isLast) {
-      setChecklistOpen(true);
-      return;
-    }
-    setCheckedQuestions({});
-    session.goToStep(stepIndex + 1);
+    if (!isLast) goTo(stageIndex + 1);
   }
   function goPrev() {
-    if (stepIndex === 0) return;
-    setCheckedQuestions({});
-    session.goToStep(stepIndex - 1);
+    if (stageIndex > 0) goTo(stageIndex - 1);
   }
-  function endMeeting() {
-    session.end();
-    navigate(`/scripts/${scriptId}/resumo`);
+
+  async function endMeeting() {
+    update((m) => ({ ...m, endedAt: new Date().toISOString() }));
+    await flush();
+    navigate(`/reunioes/${meeting!.id}`);
   }
+
+  const diagnosisIndex = stages.findIndex((s) => s.kind === 'diagnosis');
 
   return (
     <div className="call-mode">
       <header className="call-topbar">
-        <button type="button" className="call-exit-btn" aria-label="Sair da reunião" onClick={() => navigate(`/scripts/${scriptId}`)}>✕</button>
+        <button type="button" className="call-exit-btn" aria-label="Sair da reunião" onClick={() => navigate(`/scripts/${productId}`)}>✕</button>
         <div className="call-progress-wrap">
-          <div className="call-progress-label">Etapa {stepIndex + 1} de {total}</div>
+          <div className="call-progress-label">
+            Etapa {stageIndex + 1} de {total}
+            <span className="call-save-status">{saveStatus === 'saving' ? ' · Salvando…' : saveStatus === 'saved' ? ' · Salvo' : ''}</span>
+          </div>
           <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${((stepIndex + 1) / total) * 100}%` }} />
+            <div className="progress-fill" style={{ width: `${((stageIndex + 1) / total) * 100}%` }} />
           </div>
         </div>
         <div className="call-topbar-actions">
-          <button type="button" className="call-tool-btn" onClick={() => setQuickHelpOpen(true)}>Aconteceu na call</button>
-          <button type="button" className="call-tool-btn" onClick={() => setNotesOpen(true)}>Notas</button>
+          <button type="button" className="call-tool-btn objection-btn" onClick={() => setObjectionOpen(true)}>Objeção</button>
+          <button type="button" className="call-tool-btn" onClick={() => setCopilotOpen(true)}>Copilot</button>
         </div>
       </header>
 
       <main className="call-body">
-        <div className="call-step-kicker">{script.title}</div>
-        <h2 className="call-step-title">{step.title}</h2>
-
+        <div className="call-step-kicker">{product.title}</div>
+        <h2 className="call-step-title">{stage.title}</h2>
         <div className="call-block">
           <span className="call-block-label">Objetivo desta etapa</span>
-          <p className="call-objective-text">{step.objective}</p>
+          <p className="call-objective-text">{stage.objective}</p>
         </div>
 
-        {step.responseOptions && (
-          <ResponseOptionPicker
-            options={step.responseOptions}
-            selected={meeting.selectedResponseOption}
-            onSelect={session.setResponseOption}
-          />
+        {stage.kind === 'intro' && <IntroStage stage={stage} />}
+        {stage.kind === 'questions' && (
+          <QuestionsStage stage={stage} meeting={meeting} update={update} navigate={navigate} onViewTechnique={onViewTechnique} />
+        )}
+        {stage.kind === 'qualification' && (
+          <QualificationStage stage={stage} meeting={meeting} update={update} navigate={navigate} onViewTechnique={onViewTechnique} />
+        )}
+        {stage.kind === 'diagnosis' && <DiagnosisStage meeting={meeting} update={update} />}
+        {stage.kind === 'diagnosisReturn' && (
+          <DiagnosisReturnStage meeting={meeting} update={update} onEditDiagnosis={() => diagnosisIndex >= 0 && goTo(diagnosisIndex)} />
+        )}
+        {stage.kind === 'abzaIntro' && <AbzaIntroStage meeting={meeting} />}
+        {stage.kind === 'solution' && <SolutionStage stage={stage} meeting={meeting} update={update} />}
+        {stage.kind === 'scope' && <ScopeStage stage={stage} meeting={meeting} update={update} />}
+        {stage.kind === 'pricing' && <PricingStage stage={stage} meeting={meeting} update={update} />}
+        {stage.kind === 'closing' && (
+          <ClosingStage stage={stage} meeting={meeting} update={update} navigate={navigate} onViewTechnique={onViewTechnique} />
         )}
 
-        {step.questions && step.questions.length > 0 && (
-          <div className="call-block">
-            <span className="call-block-label">Perguntas sugeridas</span>
-            <div className="call-question-list">
-              {step.questions.map((q, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  className={`call-question${checkedQuestions[i] ? ' checked' : ''}`}
-                  onClick={() => setCheckedQuestions((c) => ({ ...c, [i]: !c[i] }))}
-                >
-                  <span className="call-question-box">{checkedQuestions[i] ? '✓' : ''}</span>
-                  <span>{q}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {step.watchFor && step.watchFor.length > 0 && (
-          <div className="call-block soft">
-            <span className="call-block-label">O que observar</span>
-            <ul className="call-watchfor-list">
-              {step.watchFor.map((w) => <li key={w}>{w}</li>)}
-            </ul>
-          </div>
-        )}
-
-        {step.technique && (
-          <TechniqueCallout technique={step.technique} navigate={navigate} onView={session.markTechniqueViewed} />
-        )}
-
-        {step.nextMove && (
-          <div className="call-nextmove"><span className="arrow">→</span>{step.nextMove}</div>
+        {stage.kind !== 'questions' && stage.kind !== 'qualification' && stage.kind !== 'closing' && stage.technique && (
+          <TechniqueCallout technique={stage.technique} navigate={navigate} onView={onViewTechnique} />
         )}
       </main>
 
       <footer className="call-footer">
-        <button type="button" className="call-nav-btn" onClick={goPrev} disabled={stepIndex === 0}>← Etapa anterior</button>
+        <button type="button" className="call-nav-btn" onClick={goPrev} disabled={stageIndex === 0}>← Etapa anterior</button>
         {isLast ? (
-          <button type="button" className="call-nav-btn primary" onClick={() => setChecklistOpen(true)}>Checklist de saída →</button>
+          <button type="button" className="call-nav-btn primary" onClick={endMeeting}>Encerrar reunião →</button>
         ) : (
           <button type="button" className="call-nav-btn primary" onClick={goNext}>Próxima etapa →</button>
         )}
       </footer>
 
-      {notesOpen && <NotesDrawer session={session} onClose={() => setNotesOpen(false)} />}
-      {quickHelpOpen && (
-        <QuickHelpDrawer navigate={navigate} onView={session.markTechniqueViewed} onClose={() => setQuickHelpOpen(false)} />
-      )}
-      {checklistOpen && (
-        <ExitChecklist
-          checklist={meeting.checklist}
-          onToggle={session.toggleChecklist}
-          onClose={() => setChecklistOpen(false)}
-          onEnd={endMeeting}
+      {objectionOpen && (
+        <ObjectionOverlay
+          currentStageId={stage.id}
+          update={update}
+          navigate={navigate}
+          onViewTechnique={onViewTechnique}
+          onClose={() => setObjectionOpen(false)}
         />
       )}
+      {copilotOpen && <CopilotPanel meeting={meeting} onClose={() => setCopilotOpen(false)} />}
     </div>
   );
 }

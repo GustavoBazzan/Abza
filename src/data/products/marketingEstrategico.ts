@@ -1,0 +1,95 @@
+import type { ProductScript } from '../meeting';
+import { openingStage, qualificationStage, diagnosisStage, diagnosisReturnStage, abzaIntroStage, pricingStage, closingStage } from './shared';
+
+export const marketingEstrategico: ProductScript = {
+  id: 'marketing-estrategico',
+  order: 1,
+  title: 'Marketing Estratégico',
+  shortDescription: 'Contrato mensal — do cenário comercial ao fechamento, numa call só.',
+  objective: 'Sair de "quantidade de posts" e chegar a aquisição, posicionamento e crescimento.',
+  stages: [
+    openingStage('marketing estratégico'),
+    {
+      id: 'motivacao',
+      kind: 'questions',
+      title: 'Motivação — por que agora?',
+      objective: 'Descobrir o que fez o cliente procurar isso agora, não em outro momento.',
+      questions: [
+        { id: 'mkt-q1', text: 'O que fez vocês decidirem investir em marketing estratégico agora?', watchFor: ['Evento motivador', 'Urgência real vs. curiosidade'] },
+        { id: 'mkt-q2', text: 'Aconteceu algo recente que tornou isso prioridade?', watchFor: ['Mudança de cenário', 'Pressão interna', 'Crescimento'] },
+      ],
+    },
+    {
+      id: 'cenario-problema',
+      kind: 'questions',
+      title: 'Cenário atual e problema',
+      objective: 'Mapear operação de marketing e vendas sem julgar, e nomear onde trava.',
+      questions: [
+        { id: 'mkt-q3', text: 'Como está o faturamento hoje e qual o objetivo de crescimento?' },
+        { id: 'mkt-q4', text: 'De onde vêm os clientes de vocês hoje?', watchFor: ['Dependência de um único canal'] },
+        { id: 'mkt-q5', text: 'O que vocês fazem hoje de marketing — é interno, terceirizado, ou os dois?' },
+        { id: 'mkt-q6', text: 'Quais canais vocês usam — redes, mídia paga, conteúdo, outros?' },
+        { id: 'mkt-q7', text: 'Como funciona o processo comercial depois que o lead chega? Vocês usam CRM?', watchFor: ['Ausência de processo ou de dado histórico — é gargalo, não só mídia'] },
+      ],
+    },
+    {
+      id: 'impacto',
+      kind: 'questions',
+      title: 'Impacto e consequências',
+      objective: 'Transformar o sintoma percebido em impacto comercial mensurável.',
+      questions: [
+        { id: 'mkt-q8', text: 'O que acontece se esse cenário continuar como está nos próximos 12 meses?' },
+        { id: 'mkt-q9', text: 'Isso já custou alguma oportunidade real — um cliente, uma meta, um lançamento?' },
+        { id: 'mkt-q10', text: 'Onde está o principal gargalo hoje — geração de lead, conversão, ou capacidade de atender?' },
+      ],
+      nextMove: 'Não trate marketing como "quantidade de posts" — direcione para aquisição, conversão e crescimento.',
+    },
+    {
+      id: 'objetivo',
+      kind: 'questions',
+      title: 'Objetivo desejado',
+      objective: 'Entender como seria o sucesso na visão do cliente.',
+      questions: [
+        { id: 'mkt-q11', text: 'Qual a principal meta dos próximos meses — crescer receita, marca, ou os dois?' },
+        { id: 'mkt-q12', text: 'Como vocês gostariam que a aquisição de clientes funcionasse daqui a 6 meses?' },
+      ],
+    },
+    qualificationStage('marketing estratégico'),
+    diagnosisStage(),
+    diagnosisReturnStage(),
+    abzaIntroStage(),
+    {
+      id: 'apresentacao-solucao',
+      kind: 'solution',
+      title: 'Apresentação da solução',
+      objective: 'Apresentar cada frente conectada ao que o cliente já disse — nunca como escopo genérico.',
+      solutionParts: [
+        { id: 'mkt-s1', title: 'Diagnóstico e posicionamento', whyItEnters: 'Conecta com o gargalo identificado no cenário atual.' },
+        { id: 'mkt-s2', title: 'Estratégia de aquisição', whyItEnters: 'Conecta com a origem dos clientes hoje e a dependência de canal.' },
+        { id: 'mkt-s3', title: 'Plano de conteúdo e canais', whyItEnters: 'Conecta com os canais que o cliente já usa (ou deveria usar).' },
+        { id: 'mkt-s4', title: 'Estruturação comercial e CRM', whyItEnters: 'Conecta com a ausência de processo ou dado identificada na qualificação.' },
+        { id: 'mkt-s5', title: 'Acompanhamento e otimização', whyItEnters: 'Conecta com o objetivo de crescimento definido pelo cliente.' },
+      ],
+      nextMove: 'Diga: "Você comentou [X]. É exatamente por isso que aqui entra [Y]."',
+    },
+    {
+      id: 'escopo',
+      kind: 'scope',
+      title: 'Construção do escopo',
+      objective: 'Montar o escopo recomendado durante a própria reunião.',
+      scopeItems: [
+        { id: 'mkt-sc1', label: 'Estratégia', recommended: true },
+        { id: 'mkt-sc2', label: 'Posicionamento', recommended: true },
+        { id: 'mkt-sc3', label: 'Plano de conteúdo', recommended: true },
+        { id: 'mkt-sc4', label: 'Gestão de redes sociais' },
+        { id: 'mkt-sc5', label: 'Tráfego pago' },
+        { id: 'mkt-sc6', label: 'Landing pages' },
+        { id: 'mkt-sc7', label: 'CRM / automação' },
+        { id: 'mkt-sc8', label: 'Relatórios de performance' },
+        { id: 'mkt-sc9', label: 'Consultoria comercial' },
+      ],
+    },
+    pricingStage(),
+    closingStage(),
+  ],
+};

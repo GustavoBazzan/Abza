@@ -1,0 +1,97 @@
+import type { ProductScript } from '../meeting';
+import { openingStage, qualificationStage, diagnosisStage, diagnosisReturnStage, abzaIntroStage, pricingStage, closingStage } from './shared';
+
+export const identidadeVisual: ProductScript = {
+  id: 'identidade-visual',
+  order: 2,
+  title: 'Identidade Visual',
+  shortDescription: 'De "precisamos mudar o logo" até "faz sentido avançarmos?" — sem sair do roteiro.',
+  objective: 'Transformar um pedido estético em percepção de valor, posicionamento e confiança.',
+  stages: [
+    openingStage('identidade visual'),
+    {
+      id: 'motivacao',
+      kind: 'questions',
+      title: 'Motivação — por que agora?',
+      objective: 'Descobrir o gatilho real — nunca aceitar "queremos modernizar" como resposta final.',
+      questions: [
+        { id: 'iv-q1', text: 'O que está motivando pensar na marca agora?', watchFor: ['Evento motivador', 'Mudança recente na empresa'] },
+        { id: 'iv-q2', text: 'O que incomoda hoje na identidade atual?' },
+      ],
+      nextMove: 'Se a resposta for só "quer uma logo nova", volte com: "o que exatamente incomoda hoje?"',
+    },
+    {
+      id: 'cenario-problema',
+      kind: 'questions',
+      title: 'Cenário atual e problema',
+      objective: 'Transformar sintomas ("preciso de logo nova") em problema comercial.',
+      questions: [
+        { id: 'iv-q3', text: 'A empresa mudou e a identidade ficou para trás?' },
+        { id: 'iv-q4', text: 'Como vocês acham que são percebidos hoje?' },
+        { id: 'iv-q5', text: 'Existe desalinhamento entre o que vocês cobram/entregam e como a marca aparece?', watchFor: ['Desalinhamento preço x percepção'] },
+        { id: 'iv-q6', text: 'Existe falta de consistência entre os pontos de contato — site, proposta, redes, materiais?' },
+      ],
+    },
+    {
+      id: 'impacto',
+      kind: 'questions',
+      title: 'Impacto e consequências',
+      objective: 'Ligar a identidade a confiança, preço e resultado comercial — não só estética.',
+      questions: [
+        { id: 'iv-q7', text: 'Isso afeta a confiança na hora de fechar negócio?' },
+        { id: 'iv-q8', text: 'Isso já prejudicou alguma oportunidade — perder para um concorrente com marca mais forte, por exemplo?' },
+        { id: 'iv-q9', text: 'Isso interfere no preço que vocês conseguem cobrar?' },
+      ],
+    },
+    {
+      id: 'objetivo',
+      kind: 'questions',
+      title: 'Objetivo desejado',
+      objective: 'Descobrir como querem ser vistos e por quem.',
+      questions: [
+        { id: 'iv-q10', text: 'Como vocês querem ser percebidos?' },
+        { id: 'iv-q11', text: 'Quem vocês querem atrair que hoje não atraem?' },
+        { id: 'iv-q12', text: 'O que muda comercialmente depois desse projeto?' },
+      ],
+    },
+    qualificationStage('identidade visual'),
+    diagnosisStage(),
+    diagnosisReturnStage(),
+    abzaIntroStage(),
+    {
+      id: 'apresentacao-solucao',
+      kind: 'solution',
+      title: 'Apresentação da solução',
+      objective: 'Cada etapa conectada ao que o cliente já relatou — evitar apresentação genérica de escopo.',
+      solutionParts: [
+        { id: 'iv-s1', title: 'Diagnóstico e posicionamento', whyItEnters: 'Conecta com a percepção atual relatada pelo cliente.' },
+        { id: 'iv-s2', title: 'Direção estratégica', whyItEnters: 'Conecta com quem o cliente quer atrair e como quer ser percebido.' },
+        { id: 'iv-s3', title: 'Conceito', whyItEnters: 'Traduz a direção estratégica aprovada em ideia central da marca.' },
+        { id: 'iv-s4', title: 'Sistema de identidade', whyItEnters: 'Resolve a falta de consistência identificada nos pontos de contato.' },
+        { id: 'iv-s5', title: 'Aplicações', whyItEnters: 'Conecta com os pontos de contato específicos citados pelo cliente.' },
+        { id: 'iv-s6', title: 'Implantação', whyItEnters: 'Garante que a mudança realmente chegue a todos os pontos de contato.' },
+      ],
+      nextMove: 'Diga: "Você comentou [X]. É exatamente por isso que aqui entra [Y]."',
+    },
+    {
+      id: 'escopo',
+      kind: 'scope',
+      title: 'Construção do escopo',
+      objective: 'Montar o escopo recomendado durante a própria reunião.',
+      scopeItems: [
+        { id: 'iv-sc1', label: 'Estratégia', recommended: true },
+        { id: 'iv-sc2', label: 'Posicionamento', recommended: true },
+        { id: 'iv-sc3', label: 'Identidade visual', recommended: true },
+        { id: 'iv-sc4', label: 'Manual de marca', recommended: true },
+        { id: 'iv-sc5', label: 'Aplicações', recommended: true },
+        { id: 'iv-sc6', label: 'Naming' },
+        { id: 'iv-sc7', label: 'Site' },
+        { id: 'iv-sc8', label: 'Social kit' },
+        { id: 'iv-sc9', label: 'Materiais comerciais' },
+        { id: 'iv-sc10', label: 'Produção' },
+      ],
+    },
+    pricingStage(),
+    closingStage(),
+  ],
+};

@@ -8,9 +8,10 @@ import { useCallback, useEffect, useState } from 'react';
 export type Route =
   | { name: 'playbook'; openTechniqueNum?: string }
   | { name: 'scripts-home' }
-  | { name: 'script-overview'; scriptId: string }
-  | { name: 'script-call'; scriptId: string }
-  | { name: 'script-summary'; scriptId: string };
+  | { name: 'meeting-setup'; productId: string }
+  | { name: 'call-mode'; productId: string; meetingId: string }
+  | { name: 'meetings-list' }
+  | { name: 'meeting-detail'; meetingId: string };
 
 function parseHash(hash: string): Route {
   const clean = hash.replace(/^#\/?/, '');
@@ -18,10 +19,18 @@ function parseHash(hash: string): Route {
 
   if (parts[0] === 'scripts') {
     if (parts.length < 2) return { name: 'scripts-home' };
-    const scriptId = parts[1];
-    if (parts[2] === 'call') return { name: 'script-call', scriptId };
-    if (parts[2] === 'resumo') return { name: 'script-summary', scriptId };
-    return { name: 'script-overview', scriptId };
+    const productId = parts[1];
+    if (parts[2] === 'call') {
+      // No meeting id (stale link / manual edit) — land on setup instead of crashing.
+      if (parts[3]) return { name: 'call-mode', productId, meetingId: parts[3] };
+      return { name: 'meeting-setup', productId };
+    }
+    return { name: 'meeting-setup', productId };
+  }
+
+  if (parts[0] === 'reunioes') {
+    if (parts[1]) return { name: 'meeting-detail', meetingId: parts[1] };
+    return { name: 'meetings-list' };
   }
 
   if (parts[0] === 'playbook') {
@@ -35,9 +44,10 @@ function parseHash(hash: string): Route {
 export function routePath(route: Route): string {
   switch (route.name) {
     case 'scripts-home': return '/scripts';
-    case 'script-overview': return `/scripts/${route.scriptId}`;
-    case 'script-call': return `/scripts/${route.scriptId}/call`;
-    case 'script-summary': return `/scripts/${route.scriptId}/resumo`;
+    case 'meeting-setup': return `/scripts/${route.productId}`;
+    case 'call-mode': return `/scripts/${route.productId}/call/${route.meetingId}`;
+    case 'meetings-list': return '/reunioes';
+    case 'meeting-detail': return `/reunioes/${route.meetingId}`;
     case 'playbook': return route.openTechniqueNum ? `/playbook/tecnica/${route.openTechniqueNum}` : '/playbook';
   }
 }

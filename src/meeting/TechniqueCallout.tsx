@@ -1,15 +1,14 @@
 import { TECH } from '../data/content';
-import type { RecommendedTechnique } from '../data/scripts';
+import type { RecommendedTechnique } from '../data/meeting';
 
 interface TechniqueCalloutProps {
   technique: RecommendedTechnique;
   navigate: (path: string) => void;
   onView?: (num: string) => void;
-  /** shorter label used inside the call-mode step ("Ver técnica no Playbook") vs. drawers ("Ver técnica completa") */
   label?: string;
 }
 
-export function TechniqueCallout({ technique, navigate, onView, label = 'Ver técnica no Playbook' }: TechniqueCalloutProps) {
+export function TechniqueCallout({ technique, navigate, onView, label = 'Ver no Playbook' }: TechniqueCalloutProps) {
   const tech = TECH.find((t) => t.num === technique.techniqueNum);
   if (!tech) return null;
 
