@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Logo, Symbol } from '../components/Brand';
+import { AreaSwitcher } from '../components/AreaSwitcher';
 import { NAV } from '../data/content';
 
 interface MobileNavProps {
   active: number;
   progress: number;
   onNavigate: (id: string) => void;
+  onNavigateArea: (path: string) => void;
 }
 
-export function MobileNav({ active, progress, onNavigate }: MobileNavProps) {
+export function MobileNav({ active, progress, onNavigate, onNavigateArea }: MobileNavProps) {
   const [open, setOpen] = useState(false);
   const pct = Math.round(progress * 100);
 
@@ -70,6 +72,8 @@ export function MobileNav({ active, progress, onNavigate }: MobileNavProps) {
               <Logo height={22} />
               <button type="button" className="modal-close" aria-label="Fechar menu" onClick={() => setOpen(false)}>✕</button>
             </div>
+
+            <AreaSwitcher active="playbook" onNavigate={onNavigateArea} className="mobile-nav-area-switcher" />
 
             <nav className="mobile-nav-list">
               {NAV.map((item, i) => (

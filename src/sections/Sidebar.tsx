@@ -1,16 +1,19 @@
 import { Logo } from '../components/Brand';
+import { AreaSwitcher } from '../components/AreaSwitcher';
 import { NAV } from '../data/content';
 
 interface SidebarProps {
   active: number;
   progress: number;
   onNavigate: (id: string) => void;
+  onNavigateArea: (path: string) => void;
 }
 
-export function Sidebar({ active, progress, onNavigate }: SidebarProps) {
+export function Sidebar({ active, progress, onNavigate, onNavigateArea }: SidebarProps) {
   const pct = Math.round(progress * 100);
   return (
     <aside className="sidebar">
+      <AreaSwitcher active="playbook" onNavigate={onNavigateArea} className="sidebar-area-switcher" />
       <div className="sidebar-brand">
         <Logo height={26} />
         <div className="sidebar-brand-label">Sales Playbook<br />Ed. 2026 · Uso interno</div>

@@ -21,13 +21,25 @@ function scrollToId(id: string) {
   if (el) window.scrollTo({ top: el.offsetTop - 8, behavior: 'smooth' });
 }
 
-export default function App() {
+interface AppProps {
+  onNavigateArea: (path: string) => void;
+  /** technique num (TECH[].num) to auto-open — used for deep links from Scripts de Reunião */
+  openTechniqueNum?: string;
+}
+
+export default function App({ onNavigateArea, openTechniqueNum }: AppProps) {
   const [active, setActive] = useState(0);
   const [progress, setProgress] = useState(0);
   const [step, setStep] = useState(0);
   const [techIdx, setTechIdx] = useState<number | null>(null);
   const [objIdx, setObjIdx] = useState<number | null>(null);
   const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!openTechniqueNum) return;
+    const idx = TECH.findIndex((t) => t.num === openTechniqueNum);
+    if (idx >= 0) setTechIdx(idx);
+  }, [openTechniqueNum]);
 
   useEffect(() => {
     function onScroll() {
@@ -81,10 +93,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar active={active} progress={progress} onNavigate={scrollToId} />
+      <Sidebar active={active} progress={progress} onNavigate={scrollToId} onNavigateArea={onNavigateArea} />
 
       <main className="main">
-        <MobileNav active={active} progress={progress} onNavigate={scrollToId} />
+        <MobileNav active={active} progress={progress} onNavigate={scrollToId} onNavigateArea={onNavigateArea} />
         <Hero onExplore={goExplore} onTechniques={goTechniques} />
         <Philosophy />
         <Anatomy />

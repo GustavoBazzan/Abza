@@ -117,6 +117,34 @@ button { font: inherit; }
 
 .main { flex: 1; min-width: 0; }
 
+/* ---- Area switcher (Playbook | Scripts de Reunião) — shared by both areas ---- */
+.area-switcher {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--ink-50);
+  border: 1px solid var(--ink-150);
+  border-radius: var(--radius-md);
+}
+.area-switcher-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+  transition: background 140ms var(--ease-standard), color 140ms var(--ease-standard);
+  min-height: 36px;
+}
+.area-switcher-tab.active { background: var(--ink-950); color: #FFFFFF; }
+.sidebar-area-switcher { margin: 0 28px 20px; width: calc(100% - 56px); }
+.mobile-nav-area-switcher { margin: 0 20px 18px; }
+
 /* ---- Shared section bits ---- */
 .section-kicker { display: flex; align-items: baseline; gap: 14px; margin-bottom: 28px; }
 .section-kicker-num { font-family: var(--font-mono); font-size: 11px; letter-spacing: .18em; color: var(--abza-red); }
