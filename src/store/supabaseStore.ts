@@ -64,6 +64,9 @@ function rowToMeeting(
     })),
     techniquesViewed: row.techniques_viewed,
     insights: insights.map((i) => ({ id: i.id, source: i.source as 'manual' | 'ai', text: i.text, createdAt: i.created_at })),
+    // Histórico do Copilot ainda não tem tabela própria no schema Supabase —
+    // hoje só é persistido via localStorage. Ver supabase/schema.sql.
+    copilotHistory: [],
     startedAt: row.started_at,
     updatedAt: row.updated_at,
     endedAt: row.ended_at ?? undefined,

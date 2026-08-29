@@ -1,30 +1,38 @@
 import { useState, type MouseEvent } from 'react';
-import { OBJECTION_TYPES, type Meeting, type ObjectionType } from '../data/meeting';
+import { OBJECTION_TYPES, type Meeting, type ObjectionEvent, type ObjectionType } from '../data/meeting';
 import { OBJECTION_PLAYBOOK } from '../data/objectionPlaybook';
+import type { CopilotTrigger } from '../knowledge/copilotAnalysis';
 import { TechniqueCallout } from './TechniqueCallout';
 
 interface ObjectionOverlayProps {
+  meeting: Meeting;
   currentStageId: string;
   update: (patch: (m: Meeting) => Meeting) => void;
+  analyze: (meeting: Meeting, trigger: CopilotTrigger, stageId: string) => void;
   navigate: (path: string) => void;
   onViewTechnique: (num: string) => void;
   onClose: () => void;
 }
 
-export function ObjectionOverlay({ currentStageId, update, navigate, onViewTechnique, onClose }: ObjectionOverlayProps) {
+export function ObjectionOverlay({ meeting, currentStageId, update, analyze, navigate, onViewTechnique, onClose }: ObjectionOverlayProps) {
   const [selected, setSelected] = useState<ObjectionType | null>(null);
   const [response, setResponse] = useState('');
   function stop(e: MouseEvent) { e.stopPropagation(); }
 
   function back() {
     if (selected) {
-      update((m) => ({
-        ...m,
-        objections: [
-          ...m.objections,
-          { id: `obj_${Date.now().toString(36)}`, type: selected, stageId: currentStageId, clientResponse: response, source: 'manual', createdAt: new Date().toISOString() },
-        ],
-      }));
+      const event: ObjectionEvent = {
+        id: `obj_${Date.now().toString(36)}`,
+        type: selected,
+        stageId: currentStageId,
+        clientResponse: response,
+        source: 'manual',
+        createdAt: new Date().toISOString(),
+      };
+      const updatedMeeting: Meeting = { ...meeting, objections: [...meeting.objections, event] };
+      update(() => updatedMeeting);
+      // Gatilho C: uma objeção acabou de ser registrada — nova análise contextual.
+      analyze(updatedMeeting, 'objection', currentStageId);
     }
     onClose();
   }

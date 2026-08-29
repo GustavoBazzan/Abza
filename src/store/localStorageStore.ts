@@ -22,13 +22,21 @@ function cleanupLegacyKeysOnce() {
   }
 }
 
+// Normaliza reuniões salvas antes de um campo novo existir (ex.:
+// copilotHistory, adicionado quando o ABZA Sales Copilot foi integrado ao
+// Modo Call) — nunca deixa um dado antigo faltando um array quebrar a
+// aplicação em vez de exigir uma migração de versão de chave.
+function normalize(meeting: Meeting): Meeting {
+  return { ...meeting, copilotHistory: meeting.copilotHistory ?? [] };
+}
+
 function readAll(): Meeting[] {
   cleanupLegacyKeysOnce();
   try {
     const raw = localStorage.getItem(CURRENT_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Meeting[]) : [];
+    return Array.isArray(parsed) ? (parsed as Meeting[]).map(normalize) : [];
   } catch {
     return [];
   }

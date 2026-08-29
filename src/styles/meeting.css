@@ -76,6 +76,7 @@
    Modo Call — chrome minimalista, feito para uso durante a reunião.
    ============================================================ */
 .call-mode { min-height: 100vh; display: flex; flex-direction: column; background: #FAF9F7; }
+.call-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 
 .call-topbar {
   position: sticky; top: 0; z-index: 40;
@@ -174,7 +175,7 @@
 /* ============================================================
    Drawers: Notas da call / Aconteceu na call / Checklist de saída
    ============================================================ */
-.notes-drawer, .quickhelp-drawer, .objection-overlay, .copilot-panel {
+.notes-drawer, .quickhelp-drawer, .objection-overlay {
   width: min(440px, 92vw); height: 100%; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   background: #FAF9F7; border-left: 1px solid var(--ink-200);
 }
@@ -310,15 +311,40 @@
 .call-tool-btn.objection-btn:hover { border-color: var(--abza-red); color: var(--abza-red-700); }
 
 /* ============================================================
-   ABZA Copilot (painel lateral — placeholder)
+   ABZA Copilot — painel operacional de inteligência.
+   Mobile: drawer sobreposto, acessível pelo botão "Copilot" na topbar.
+   Desktop (≥1080px): coluna fixa à direita, sempre visível, sem overlay
+   nem bloqueio de scroll — ver @media no fim do arquivo.
    ============================================================ */
+.copilot-sidebar-backdrop {
+  position: fixed; inset: 0; z-index: 58; background: rgba(10, 9, 8, .45);
+  opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease-standard);
+}
+.copilot-sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+
+.copilot-sidebar {
+  position: fixed; top: 0; right: 0; height: 100%; width: min(400px, 92vw);
+  transform: translateX(100%); transition: transform 220ms var(--ease-out);
+  z-index: 59; background: #FAF9F7; border-left: 1px solid var(--ink-200);
+  display: flex; flex-direction: column; overflow-y: auto;
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+}
+.copilot-sidebar.open { transform: translateX(0); }
+
 .copilot-body { padding: 22px 24px 40px; display: flex; flex-direction: column; gap: 20px; }
 .copilot-placeholder { font-size: 13.5px; line-height: 1.55; color: var(--ink-500); background: #F4F3F1; border-radius: var(--radius-md); padding: 14px 16px; }
-.copilot-status { display: flex; flex-direction: column; gap: 10px; }
 .copilot-field-list { display: flex; flex-direction: column; gap: 6px; }
 .copilot-field { display: flex; align-items: center; gap: 10px; font-size: 13.5px; line-height: 1.4; padding: 8px 0; border-bottom: 1px solid var(--ink-100); }
 .copilot-field.known { color: var(--ink-800); }
 .copilot-field.missing { color: var(--ink-500); }
+.copilot-ai-missing-list { padding-top: 4px; border-top: 1px dashed var(--ink-150); margin-top: 4px; }
+
+.copilot-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.copilot-status-line { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.copilot-status-line.status-loading { color: var(--ink-500); }
+.copilot-status-line.status-success { color: #1E7A3B; }
+.copilot-status-line.status-error { color: var(--abza-red-700); }
+.copilot-note-text { font-size: 14px; line-height: 1.55; color: var(--ink-700); margin: 0; }
 
 /* ============================================================
    Reuniões — lista
@@ -426,4 +452,23 @@
   .status-pill { align-self: flex-start; }
 
   .call-save-status { display: block; margin-left: 0; }
+
+  .copilot-toolbar .call-tool-btn { min-height: 44px; }
+}
+
+/* ============================================================
+   Desktop 13"/14" — Copilot vira coluna fixa, sempre visível,
+   nunca mais um overlay: sem backdrop, sem bloqueio de scroll,
+   sem depender do botão da topbar (que fica oculto acima do corte).
+   ============================================================ */
+@media (min-width: 1080px) {
+  .call-mode { flex-direction: row; align-items: stretch; }
+
+  .copilot-toggle-btn { display: none; }
+  .copilot-close-btn { display: none; }
+  .copilot-sidebar-backdrop { display: none; }
+  .copilot-sidebar {
+    position: sticky; top: 0; align-self: flex-start; height: 100vh;
+    transform: none; width: 360px; flex: 0 0 360px; z-index: auto;
+  }
 }

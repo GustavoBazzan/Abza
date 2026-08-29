@@ -5,6 +5,8 @@
 // que um futuro ABZA Sales Copilot (ou um Pricing Engine determinístico)
 // leia o estado de uma reunião sem precisar entender JSX.
 
+import type { CopilotAnalysisRecord } from '../knowledge/copilotAnalysis';
+
 // ---------------------------------------------------------------------------
 // Roteiro por produto (conteúdo estático, versionado no código-fonte)
 // ---------------------------------------------------------------------------
@@ -256,6 +258,8 @@ export interface Meeting {
   closing: ClosingInfo;
   techniquesViewed: string[];
   insights: AIInsight[];
+  /** Histórico de análises do ABZA Sales Copilot nesta reunião — uma entrada por chamada bem-sucedida. */
+  copilotHistory: CopilotAnalysisRecord[];
   startedAt: string;
   updatedAt: string;
   endedAt?: string;
@@ -277,6 +281,7 @@ export function createMeeting(productId: ProductId, setup: MeetingSetupInfo): Me
     closing: emptyClosing(),
     techniquesViewed: [],
     insights: [],
+    copilotHistory: [],
     startedAt: now,
     updatedAt: now,
   };
