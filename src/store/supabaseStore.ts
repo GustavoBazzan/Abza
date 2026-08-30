@@ -3,8 +3,8 @@ import type { Answer, Meeting, ObjectionEvent } from '../data/meeting';
 import { deriveMeetingStatus } from '../data/meeting';
 import type { MeetingStore } from './types';
 
-// Maps Meeting <-> the normalized schema in supabase/schema.sql. Only
-// exercised once VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are set — see
+// Maps Meeting <-> the normalized schema in supabase/migrations/. Only
+// exercised once VITE_SUPABASE_URL and a client-safe key are set — see
 // src/store/index.ts for the fallback-to-localStorage selection.
 
 interface MeetingRow {
@@ -64,8 +64,10 @@ function rowToMeeting(
     })),
     techniquesViewed: row.techniques_viewed,
     insights: insights.map((i) => ({ id: i.id, source: i.source as 'manual' | 'ai', text: i.text, createdAt: i.created_at })),
-    // Histórico do Copilot ainda não tem tabela própria no schema Supabase —
-    // hoje só é persistido via localStorage. Ver supabase/schema.sql.
+    // meeting_copilot_insights (supabase/migrations/0002) já existe no
+    // schema, mas este store ainda não lê/escreve nela — hoje o histórico
+    // do Copilot só é persistido via localStorage. Fica para quando a
+    // Fase 3 (persistência dos insights) for implementada de verdade.
     copilotHistory: [],
     startedAt: row.started_at,
     updatedAt: row.updated_at,

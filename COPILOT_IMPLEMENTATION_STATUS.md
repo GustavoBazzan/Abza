@@ -4,7 +4,7 @@
 > deve ler este arquivo inteiro antes de tocar em qualquer código. Nunca
 > contém secrets — só nomes de variáveis de ambiente, nunca valores.
 
-Última atualização: **Checkpoint 1 — Auditoria + Questionário** (aguardando respostas do Gustavo).
+Última atualização: **Checkpoint 1b — Auditoria da integração Supabase + migrations preparadas** (ainda aguardando respostas do questionário do Checkpoint 1).
 
 ---
 
@@ -48,12 +48,23 @@ Não é um chatbot genérico. Não inventa preço, fato ou resposta do cliente.
   desconhecidas). Não envia o roteiro inteiro nem técnicas completas.
 - **Persistência de reuniões**: repositório trocável (`src/store/`) —
   `localStorage` por padrão, `Supabase` automaticamente se
-  `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` estiverem definidas. Hoje
-  **nenhuma das duas está configurada neste ambiente** (ver seção 6) — a
-  aplicação roda 100% em localStorage.
-- **Autenticação**: **nenhuma existe no projeto hoje.** Nenhuma rota,
-  nenhum componente, nenhuma dependência de auth. `/api/copilot` está
-  aberto para qualquer requisição POST bem formada.
+  `VITE_SUPABASE_URL` + um key client-safe (`VITE_SUPABASE_PUBLISHABLE_KEY`,
+  nome atual da Supabase; `VITE_SUPABASE_ANON_KEY` legado ainda aceito como
+  fallback) estiverem definidas. Hoje **nenhuma variável está configurada
+  neste ambiente** (ver seção 6) — a aplicação roda 100% em localStorage.
+  Nenhuma `service_role`/secret key existe em nenhum lugar do repositório.
+- **Schema Supabase**: `supabase/migrations/0001_initial_schema.sql` e
+  `0002_copilot_insights.sql` — validados de verdade contra um Postgres 16
+  local (não só lidos): ambos rodam sem erro, são idempotentes (rodar duas
+  vezes não quebra nada), RLS testado com insert real (bloqueia sem
+  `authenticated`, libera com `authenticated`). **Nunca aplicados contra o
+  projeto Supabase real do Gustavo** — isso é ação manual dele (ver seção 7).
+- **Autenticação**: **nenhuma existe no projeto hoje** (nem UI de login, nem
+  sessão). O schema já está preparado para Supabase Auth (RLS exige
+  `authenticated`, `meetings.owner_id` referencia `auth.users`), mas a parte
+  de front-end (tela de login, gestão de sessão) ainda não foi construída —
+  isso é trabalho futuro, fora do escopo desta auditoria. `/api/copilot`
+  continua aberto para qualquer requisição POST bem formada.
 
 ---
 
@@ -73,7 +84,7 @@ Não é um chatbot genérico. Não inventa preço, fato ou resposta do cliente.
 | 9 | Configuração de modelo via variável | **Parcial** — hoje é `OPENAI_MODEL` com default `gpt-4o-mini` hardcoded em um único arquivo (fácil de trocar); pedido atual quer `OPENAI_COPILOT_MODEL` + `OPENAI_COPILOT_REASONING` com defaults novos |
 | 10 | Teste real (mock + OpenAI real) | Mock testado em sessão anterior; **OpenAI real nunca foi testada neste sandbox** (sem acesso à internet para api.openai.com) |
 | 11 | Vercel | Sem `vercel.json` (zero-config, correto para este projeto) |
-| 12 | Supabase (migrations, RLS) | Schema existe (`supabase/schema.sql`) mas nunca foi aplicado por mim; não tenho como confirmar se o Gustavo já aplicou |
+| 12 | Supabase (migrations, RLS) | **Migrations prontas e validadas** (`supabase/migrations/0001` e `0002`) — RLS testado de verdade, sem `using(true)`. **Não aplicadas** no projeto real (ação manual do Gustavo, ver seção 7). Login/Auth UI ainda não construído. |
 | 13 | Read AI | Não implementada (conforme pedido) — arquitetura já preparada (`DataSource: 'manual'\|'transcription'\|'ai'` em `Answer`/`ObjectionEvent`) |
 | 14 | Pricing Engine | Não implementada (conforme pedido) — `PricingInfo` isolado, `salesRules` já proíbe IA inventar preço |
 
@@ -120,16 +131,22 @@ pública do link** — ver questionário, seção A/G.
 | `OPENAI_API_KEY` | `api/copilot.ts`, server-side apenas | Precisa ser configurada na Vercel (Project Settings → Environment Variables). Nunca no código, nunca `VITE_`. |
 | `OPENAI_COPILOT_MODEL` | Será usado por `api/copilot.ts` (hoje ainda é `OPENAI_MODEL`, será renomeado) | Pendente — default a implementar: `gpt-5.6-terra` |
 | `OPENAI_COPILOT_REASONING` | Novo — ainda não existe no código | Pendente — default a implementar: `low` |
-| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | `src/store/supabaseClient.ts` | Opcionais — ambas vazias hoje, app roda em localStorage |
+| `VITE_SUPABASE_URL` | `src/store/supabaseClient.ts` | Opcional — vazia hoje, app roda em localStorage. Preencher com a URL do projeto Supabase real do Gustavo quando for ativar. |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | `src/store/supabaseClient.ts` | **Nome atual, preferido.** Client-safe por design (não é secreta) — só não fará nada sem RLS correta, que já está pronta nas migrations. |
+| `VITE_SUPABASE_ANON_KEY` | `src/store/supabaseClient.ts` | Legado — ainda aceito como fallback se `PUBLISHABLE_KEY` não estiver definida, para projetos Supabase mais antigos que só mostram "anon public". |
 
 Nenhum valor real está ou será commitado. `.env.example` documenta só os nomes.
+Nenhuma `service_role`/secret key é usada em lugar nenhum do projeto — nunca deve ser.
 
 ---
 
-## 7. Migrations pendentes (Supabase)
+## 7. Migrations (Supabase)
 
-- `supabase/schema.sql` existe mas **nunca foi confirmado como aplicado** — não tenho acesso ao Supabase do Gustavo para verificar.
-- Tabela `meeting_insights` existente **não bate** com o formato de `CopilotAnalysisRecord` pedido agora (falta `stage_id`, `question_id`, `summary`, `main_insight`, `next_question`, `why`, `missing_information`, `detected_objection`, `recommended_technique`, `risk_level`, `recommended_move`, `alert`, `do_not_do`, `model`). Nova migration necessária se Supabase for adotado (ver questionário B).
+- `supabase/migrations/0001_initial_schema.sql` — clients, meetings (+ `owner_id` novo, ligado a `auth.users`), meeting_answers, meeting_objections, meeting_insights, meeting_pricing_scenarios. RLS: `authenticated` apenas, sem `using(true)`.
+- `supabase/migrations/0002_copilot_insights.sql` — nova tabela `meeting_copilot_insights`, espelhando `CopilotAnalysisRecord`+`CopilotSuggestion` em colunas (não JSONB), pronta para quando a Fase 3 (persistência real dos insights) for implementada.
+- **Validadas de verdade** contra Postgres 16 local nesta sessão: rodam sem erro, idempotentes, RLS testado com insert real (nego + permite). Ver seção 8.
+- `supabase/schema.sql` (arquivo antigo, achatado) foi substituído por um ponteiro para `supabase/migrations/` — não há mais duas fontes de verdade do schema.
+- **Nunca aplicadas contra o Supabase real** — ação manual do Gustavo, ver mensagem de entrega desta auditoria para o passo a passo exato.
 
 ---
 
@@ -141,6 +158,7 @@ Nenhum valor real está ou será commitado. `.env.example` documenta só os nome
 - `/api/copilot` testado com chave real em sessão anterior — confirmado funcionando (resposta estruturada válida recebida).
 - Frontend testado com Playwright contra um servidor fake (mesmo contrato HTTP) — 3 gatilhos, 7 blocos, desktop/mobile, estado de erro, tudo confirmado.
 - **OpenAI real nunca foi testada neste sandbox atual** — sem acesso de rede a `api.openai.com` neste ambiente.
+- Migrations 0001+0002 testadas contra Postgres 16 local: aplicação limpa, reaplicação idempotente, RLS validado com insert real negado (role `anon`) e permitido (role `authenticated`), insert real em `meeting_copilot_insights` com todos os CHECK de enum aceitando os valores esperados.
 
 ---
 
