@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { Meeting } from '../data/meeting';
 import type { CopilotAnalysisRecord, CopilotTrigger } from '../knowledge/copilotAnalysis';
 import type { CopilotSuggestion } from '../knowledge/copilotSuggestion';
+import { useAuth } from '../auth/useAuth';
 
 export type CopilotStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -21,6 +22,7 @@ function newAnalysisId(): string {
  *  Nunca bloqueia a call: erro de rede, timeout ou IA indisponível só afeta
  *  este painel — o roteiro continua totalmente utilizável sem IA. */
 export function useCopilotAnalysis(update: (patch: (m: Meeting) => Meeting) => void) {
+  const { authEnabled, session } = useAuth();
   const [status, setStatus] = useState<CopilotStatus>('idle');
   const [suggestion, setSuggestion] = useState<CopilotSuggestion | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -29,14 +31,30 @@ export function useCopilotAnalysis(update: (patch: (m: Meeting) => Meeting) => v
   const analyze = useCallback(
     async (meeting: Meeting, trigger: CopilotTrigger, stageId: string) => {
       if (inFlightRef.current) return;
+
+      // Sem sessão ativa (login obrigatório neste deployment), nem tentamos
+      // chamar a API: o back-end recusaria com 401 mesmo assim, mas evitar a
+      // chamada aqui poupa uma viagem de rede e dá um erro mais claro. A
+      // call/roteiro em si nunca é bloqueada — só este painel fica indisponível.
+      if (authEnabled && !session) {
+        setStatus('error');
+        setErrorMessage('Sua sessão expirou. Faça login novamente para usar o Copilot.');
+        return;
+      }
+
       inFlightRef.current = true;
       setStatus('loading');
       setErrorMessage(null);
 
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) {
+          headers.Authorization = `Bearer ${session.access_token}`;
+        }
+
         const res = await fetch('/api/copilot', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ meeting }),
         });
 
@@ -67,7 +85,7 @@ export function useCopilotAnalysis(update: (patch: (m: Meeting) => Meeting) => v
         inFlightRef.current = false;
       }
     },
-    [update],
+    [update, authEnabled, session],
   );
 
   return { status, suggestion, errorMessage, analyze };
