@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { meetingStore } from '../store';
 import { createMeeting, type Meeting, type MeetingSetupInfo, type ProductId } from '../data/meeting';
 
-export type SaveStatus = 'idle' | 'saving' | 'saved';
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 const AUTOSAVE_DEBOUNCE_MS = 600;
 
@@ -44,7 +44,13 @@ export function useActiveMeeting(meetingId: string | undefined) {
     setSaveStatus('saving');
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
-      meetingStore.saveMeeting(next).then(() => setSaveStatus('saved'));
+      meetingStore
+        .saveMeeting(next)
+        .then(() => setSaveStatus('saved'))
+        // Nunca reporta "Salvo" quando a gravação na nuvem falhou — o dado
+        // já foi preservado localmente pelo store (ver resilientStore.ts),
+        // mas o usuário precisa ver que ainda não sincronizou.
+        .catch(() => setSaveStatus('error'));
     }, AUTOSAVE_DEBOUNCE_MS);
   }, []);
 
@@ -64,7 +70,12 @@ export function useActiveMeeting(meetingId: string | undefined) {
   const flush = useCallback(async () => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     setMeeting((prev) => {
-      if (prev) meetingStore.saveMeeting(prev).then(() => setSaveStatus('saved'));
+      if (prev) {
+        meetingStore
+          .saveMeeting(prev)
+          .then(() => setSaveStatus('saved'))
+          .catch(() => setSaveStatus('error'));
+      }
       return prev;
     });
   }, []);
@@ -97,6 +108,13 @@ export function useMeetingsList() {
  *  including on the very first render of Modo Call. */
 export async function startMeeting(productId: ProductId, setup: MeetingSetupInfo): Promise<Meeting> {
   const meeting = createMeeting(productId, setup);
-  await meetingStore.saveMeeting(meeting);
+  try {
+    await meetingStore.saveMeeting(meeting);
+  } catch (err) {
+    // Preservado localmente pelo store (ver resilientStore.ts) — a call
+    // nunca é bloqueada por uma falha de sincronização com a nuvem; o
+    // autosave do Modo Call vai tentar de novo e mostrar o status.
+    console.error('[useMeetingStore] falha ao criar reunião na nuvem — seguindo com backup local', err instanceof Error ? err.message : '(erro desconhecido)');
+  }
   return meeting;
 }

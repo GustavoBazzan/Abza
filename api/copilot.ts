@@ -62,6 +62,19 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const DEFAULT_MODEL = 'gpt-4o-mini';
 const MAX_PAYLOAD_BYTES = 200_000; // 200KB — folgado para um Meeting real, pequeno o bastante para barrar abuso.
 
+// OPENAI_COPILOT_MODEL/OPENAI_COPILOT_REASONING são os nomes atuais;
+// OPENAI_MODEL segue aceita como fallback legado para não quebrar um
+// deployment que só tenha a variável antiga configurada. `reasoning` só é
+// enviado à OpenAI quando a variável existe — modelos que não são da
+// família "reasoning" simplesmente não a esperam, e omiti-la evita mandar
+// um parâmetro que o modelo configurado talvez não reconheça.
+function resolveModel(): string {
+  return process.env.OPENAI_COPILOT_MODEL || process.env.OPENAI_MODEL || DEFAULT_MODEL;
+}
+function resolveReasoningEffort(): string | undefined {
+  return process.env.OPENAI_COPILOT_REASONING || undefined;
+}
+
 // Rate limit simples, em memória, por usuário autenticado — sem
 // infraestrutura nova (sem Redis/serviço externo). É "best effort": cada
 // instância serverless da Vercel tem sua própria memória, então sob várias
@@ -221,11 +234,14 @@ export default async function handler(req: CopilotRequest, res: CopilotResponse)
 
   // 5) Só agora, com sessão validada e payload são, a OpenAI é chamada.
   const client = new OpenAI({ apiKey });
+  const model = resolveModel();
+  const reasoningEffort = resolveReasoningEffort();
 
   try {
     const response = await client.responses.create(
       {
-        model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
+        model,
+        ...(reasoningEffort ? { reasoning: { effort: reasoningEffort as OpenAI.Reasoning['effort'] } } : {}),
         input: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: JSON.stringify(promptContext) },
@@ -258,7 +274,10 @@ export default async function handler(req: CopilotRequest, res: CopilotResponse)
       return;
     }
 
-    res.status(200).json({ suggestion });
+    // `model` não é secreto (é só o nome do modelo configurado, ex.:
+    // "gpt-5.6-terra") — devolvido para o frontend poder persistir qual
+    // modelo gerou cada sugestão em meeting_copilot_insights.model.
+    res.status(200).json({ suggestion, model });
   } catch (err) {
     handleOpenAiError(res, err);
   }

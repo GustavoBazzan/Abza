@@ -9,15 +9,25 @@ import type { CopilotSuggestion } from './copilotSuggestion';
 export type CopilotTrigger = 'stage' | 'manual' | 'objection';
 
 /** Um registro de análise do Copilot, associado a uma reunião e etapa —
- *  histórico bruto, pronto para persistência (localStorage hoje, via
- *  Meeting.copilotHistory; Supabase quando a tabela correspondente for
- *  adicionada ao schema). */
+ *  histórico bruto, persistido em Meeting.copilotHistory (localStorage) e,
+ *  quando Supabase está configurado, também em `meeting_copilot_insights`
+ *  (supabase/migrations/0002_copilot_insights.sql) — ver
+ *  src/store/supabaseStore.ts. */
 export interface CopilotAnalysisRecord {
   id: string;
   meetingId: string;
   timestamp: string;
   stageId: string;
+  /** Pergunta específica em foco no momento da análise, quando aplicável —
+   *  ainda não rastreada pelo Modo Call hoje, então sempre `null` na prática. */
+  questionId: string | null;
   trigger: CopilotTrigger;
+  /** Sempre 'ai' hoje — o mesmo enum de DataSource usado em Answer/
+   *  ObjectionEvent, para o dia em que uma sugestão manual/transcrita entrar aqui também. */
+  source: 'manual' | 'transcription' | 'ai';
+  /** Modelo da OpenAI usado nesta chamada (ex.: valor de OPENAI_COPILOT_MODEL
+   *  no momento), devolvido por /api/copilot — null se a API não informar. */
+  model: string | null;
   /** Resposta estruturada completa da IA — carrega mainInsight, nextQuestion,
    *  recommendedMove, riskLevel e todo o resto, sem duplicar o formato aqui. */
   suggestion: CopilotSuggestion;

@@ -121,7 +121,9 @@ export function CallMode({ productId, meetingId, navigate }: CallModeProps) {
           <div className="call-progress-wrap">
             <div className="call-progress-label">
               Etapa {stageIndex + 1} de {total}
-              <span className="call-save-status">{saveStatus === 'saving' ? ' · Salvando…' : saveStatus === 'saved' ? ' · Salvo' : ''}</span>
+              <span className={`call-save-status${saveStatus === 'error' ? ' call-save-status-error' : ''}`}>
+                {saveStatus === 'saving' ? ' · Salvando…' : saveStatus === 'saved' ? ' · Salvo' : saveStatus === 'error' ? ' · Não sincronizado — salvo só neste dispositivo' : ''}
+              </span>
             </div>
             <div className="progress-track">
               <div className="progress-fill" style={{ width: `${((stageIndex + 1) / total) * 100}%` }} />

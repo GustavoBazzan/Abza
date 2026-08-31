@@ -4,7 +4,7 @@
 > deve ler este arquivo inteiro antes de tocar em qualquer código. Nunca
 > contém secrets — só nomes de variáveis de ambiente, nunca valores.
 
-Última atualização: **Checkpoint 1d — `/api/copilot` protegido server-side com validação de sessão Supabase** (ainda aguardando respostas do questionário do Checkpoint 1 sobre o Copilot em si — usuários/produtos/comportamento do agente).
+Última atualização: **Checkpoint 1e — persistência real (Supabase) resiliente + histórico do Copilot persistido; migrations reais ainda NÃO aplicadas (bloqueado em autenticação da Supabase CLI, ver seção 11)** (ainda aguardando respostas do questionário do Checkpoint 1 sobre o Copilot em si — usuários/produtos/comportamento do agente).
 
 ---
 
@@ -303,21 +303,159 @@ Nenhuma `service_role`/secret key é usada em lugar nenhum do projeto — nunca 
 
 ---
 
+## 8-A. Persistência real resiliente + histórico do Copilot (Checkpoint 1e)
+
+**Contexto**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
+`OPENAI_API_KEY`, `OPENAI_COPILOT_MODEL` e `OPENAI_COPILOT_REASONING` já
+estão configuradas na Vercel (confirmado pelo Gustavo), mas as migrations
+(seção 7) **ainda não foram aplicadas no projeto Supabase real** — ver
+seção 11 para o bloqueio exato. Enquanto isso, o código dos itens abaixo já
+está pronto e testado (com um shim local do banco, nunca contra o projeto
+real — ver seção 11).
+
+**1) Persistência nunca mascara erro da nuvem** (`src/store/resilientStore.ts`,
+novo): quando o backend é Supabase, `saveMeeting` grava normalmente; se a
+gravação falhar (rede, RLS, projeto fora do ar), o dado é preservado num
+cache local (`localStorage`, chave própria — nunca a fonte de verdade) e um
+`CloudSaveFailedError` é lançado — nunca engolido. `useActiveMeeting`
+(`src/meeting/useMeetingStore.ts`) captura isso e muda `saveStatus` para
+`'error'`, que o Modo Call (`CallMode.tsx`) mostra como "· Não sincronizado
+— salvo só neste dispositivo" no lugar de "· Salvo". `startMeeting` (criar
+reunião) nunca bloqueia a call mesmo se o save inicial falhar — só loga e
+segue, confiando no backup local + no autosave tentando de novo depois.
+Quando a gravação volta a funcionar, o backup local daquela reunião é
+removido — ele nunca vira uma segunda fonte de verdade permanente.
+`getMeeting` cai pro backup local só quando a nuvem não tem o registro (útil
+exatamente para o caso do save inicial ter falhado) — nunca inventa dado.
+`src/store/supabaseStore.ts` foi ajustado para checar o `error` de toda
+chamada de escrita (`meetings`, `meeting_answers`, `meeting_objections`,
+`meeting_copilot_insights`) e lançar em vez de silenciosamente seguir —
+antes disso, uma escrita podia falhar e o app reportar "Salvo" mesmo assim.
+
+**2) Histórico do Copilot em `meeting_copilot_insights`**
+(`src/store/supabaseStore.ts`): cada análise do Copilot (`CopilotAnalysisRecord`,
+`src/knowledge/copilotAnalysis.ts` — agora com os campos `questionId`,
+`source`, `model` que faltavam) é persistida ali de forma append-only
+(mesmo padrão já usado para objeções), com todas as colunas pedidas:
+`meeting_id`, `stage_id`, `question_id` (sempre `null` hoje — o Modo Call
+ainda não rastreia "pergunta em foco" separado da etapa), `trigger`,
+`source` (sempre `'ai'`), `model`, `summary`, `main_insight`,
+`next_question`, `why`, `missing_information`, `detected_objection`,
+`recommended_technique`, `risk_level`, `recommended_move`, `alert`,
+`do_not_do`, `created_at`. Ao reabrir uma reunião, `getMeeting` já devolve
+`copilotHistory` populado a partir dessa tabela — a análise mais recente
+existe nos dados assim que a reunião é recarregada. **Não implementado
+ainda**: a UI do `CopilotPanel`/`MeetingDetail` não reidrata/mostra esse
+histórico automaticamente ao reabrir (hoje só mostra o que foi gerado na
+sessão atual) — isso é um ajuste de UI pequeno, separado, não feito nesta
+etapa para não expandir escopo sem pedido explícito.
+
+**3) `OPENAI_COPILOT_MODEL`/`OPENAI_COPILOT_REASONING` agora usadas de
+verdade** (`api/copilot.ts`): antes só existiam na Vercel mas o código lia
+`OPENAI_MODEL` (nome antigo). Agora `OPENAI_COPILOT_MODEL` é a primeira
+opção, com `OPENAI_MODEL` como fallback legado e `gpt-4o-mini` como último
+fallback (não presumi que "gpt-5.6-terra" fosse um nome de modelo válido
+para hardcodar como default — só passo o que estiver na env var). Quando
+`OPENAI_COPILOT_REASONING` existe, é enviada como `reasoning.effort` na
+chamada à Responses API; quando não existe, o parâmetro é omitido (não
+força `reasoning` num modelo que talvez não seja da família reasoning). A
+resposta de `/api/copilot` agora inclui `model` (não é secreto — só o nome
+do modelo usado) para o frontend persistir em `meeting_copilot_insights.model`.
+
+**Testado nesta sessão**:
+- Unit test isolado de `resilientStore.ts` (sem browser, `localStorage`
+  polyfillado em memória): save bem-sucedido não lança; save que falha
+  lança `CloudSaveFailedError` e preserva localmente sem tocar o backend
+  remoto; a reunião cujo save falhou continua recuperável via
+  `getMeeting`; ao sincronizar de novo, o backup é limpo. 6/6 OK.
+- E2E com Playwright contra a build real do app + um shim local de
+  `/rest/v1/*` (não é o Supabase real — ver seção 11): login → nova
+  reunião → responde uma pergunta → "Analisar agora" → confirma via
+  `fetch` direto ao shim que `meetings`, `meeting_answers` e
+  `meeting_copilot_insights` foram gravados de verdade pelo código real
+  (não reimplementado) de `supabaseStore.ts`, com `summary`, `risk_level`,
+  `model`, `source`, `trigger` corretos na linha — reload completo da
+  página → resposta em texto livre recuperada. 10/10 OK.
+- Typecheck (`tsc -b` + `tsc --noEmit -p tsconfig.server.json`), lint
+  (`oxlint`) e `npm run build`: limpos.
+- **Não testado contra o Supabase real nem contra a OpenAI real** — ver
+  seção 11 para o motivo exato (bloqueio de autenticação da CLI) e o que
+  falta para isso ser possível.
+
+---
+
 ## 9. Próximo passo exato
 
 **Ainda aguardando o Gustavo responder ao questionário consolidado do
-Checkpoint 1** (usuários/produtos/comportamento do Copilot) — a
-implementação de Auth e a proteção server-side do `/api/copilot` foram
-pedidos à parte, já concluídos.
+Checkpoint 1** (usuários/produtos/comportamento do Copilot) — Auth,
+proteção server-side do `/api/copilot` e persistência resiliente (Checkpoint
+1e) foram pedidos à parte, já concluídos no código.
 
-Ação manual pendente do Gustavo: criar o primeiro usuário no Supabase
-Dashboard (ver mensagem de entrega desta etapa) e configurar
-`VITE_SUPABASE_URL`/`VITE_SUPABASE_PUBLISHABLE_KEY` na Vercel + rodar as
-migrations — sem isso, tanto o Auth quanto a exigência de login em
-`/api/copilot` ficam automaticamente desativados (app continua
-funcionando, só sem exigir login em lugar nenhum). Depois de configurar,
-testar o checklist manual da mensagem de entrega desta etapa (login real,
-logout real, chamada direta ao endpoint sem token).
+**Bloqueado agora**: aplicar as migrations no projeto Supabase real requer
+autenticar a Supabase CLI — ver seção 11 para o comando exato que o
+Gustavo precisa rodar (nada de secret colado no chat). Assim que isso
+acontecer, a sessão retoma exatamente do ponto em que parou: link do
+projeto → mostrar project ref/nome → aplicar `0001` e `0002` via
+`supabase db push` → auditar RLS/schema real → seguir para os testes de
+segurança e funcionais de ponta a ponta contra o projeto real.
 
-Sugestão de próximo passo técnico (não decidido, oferecido): validar o JWT
-do Supabase dentro de `api/copilot.ts` para fechar o gap descrito na seção 5.
+Se ainda não houver nenhum usuário real no projeto, essa é a única outra
+ação manual esperada: criar o primeiro usuário em Authentication → Users →
+Add user no Supabase Dashboard (detalhes exatos na seção 11/mensagem de
+entrega desta etapa).
+
+---
+
+## 10. Não implementado ainda (por pedido explícito)
+
+Read AI, áudio/transcrição, Pricing Engine automático, CRM, dashboards
+complexos. A prioridade combinada é a infraestrutura atual 100% funcional
+antes de expandir escopo.
+
+---
+
+## 11. Automação Supabase CLI — auditoria e bloqueio atual
+
+**Auditoria feita nesta sessão**:
+- Supabase CLI: **não estava instalada** neste ambiente — instalada agora
+  (`npm install -g supabase`, versão 2.116.0). Isso resolve globalmente
+  para esta sessão; não é algo que precise ser repetido pelo Gustavo.
+- `supabase/config.toml`: **não existe** no repositório — o projeto nunca
+  foi inicializado com `supabase init`.
+- Vínculo com o projeto real: **nenhum** — sem `config.toml` linkado a
+  nenhum project ref.
+- Autenticação da CLI: **nenhuma** — `supabase projects list` devolve
+  `LegacyPlatformAuthRequiredError` (token de acesso ausente).
+
+**Por que parei exatamente aqui**: autenticar a CLI é uma ação que só pode
+ser feita pelo dono da conta Supabase — gerar um token de acesso pessoal.
+Testei as duas rotas oficiais disponíveis num ambiente sem navegador/TTY
+(`supabase login` interativo e `supabase login --no-browser`) e ambas
+recusam por não haver terminal interativo aqui — a CLI pede explicitamente
+`--token` ou a variável de ambiente `SUPABASE_ACCESS_TOKEN`. Não vou pedir
+esse token colado no chat (regra explícita do Gustavo).
+
+### AÇÃO MANUAL NECESSÁRIA
+
+1. **Onde**: gere um Personal Access Token em
+   `https://supabase.com/dashboard/account/tokens` → "Generate new token"
+   (dê um nome como `abza-cli`). Copie o valor uma única vez.
+2. **O que fazer**: **não cole esse token no chat.** Adicione-o como
+   variável de ambiente **deste ambiente do Claude Code** (não é uma
+   variável da Vercel, é separada) chamada `SUPABASE_ACCESS_TOKEN`, com o
+   valor do token gerado — isso é exatamente o mecanismo oficial que a
+   própria Supabase documenta para autenticar a CLI em ambientes sem
+   navegador/CI. Isso é feito nas configurações do ambiente na interface do
+   Claude Code (claude.ai/code ou no app), não nesta conversa.
+3. **O que responder quando terminar**: só confirme que configurou a
+   variável (não precisa dizer o valor). Se este ambiente exigir uma nova
+   sessão para a variável ficar disponível no container, me avise disso
+   também, ou simplesmente me diga "configurei" e eu confirmo se a CLI já
+   enxerga o token.
+
+Depois de autenticado, os próximos passos automáticos (sem nova ação sua,
+a não ser a criação do primeiro usuário — ver seção 6/9) são: descobrir o
+project ref via `supabase projects list`, mostrar project ref + nome antes
+de tocar no banco, `supabase link`, `supabase db push` com as duas
+migrations, depois auditoria de RLS/schema real, testes de segurança e
+funcionais de ponta a ponta.

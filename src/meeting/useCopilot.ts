@@ -12,6 +12,10 @@ interface CopilotApiErrorBody {
 
 interface CopilotApiSuccessBody {
   suggestion?: CopilotSuggestion;
+  /** Nome do modelo que gerou a sugestão (ex.: "gpt-5.6-terra") — não é
+   *  secreto, só metadado para o histórico persistido (ver
+   *  meeting_copilot_insights.model). */
+  model?: string | null;
 }
 
 function newAnalysisId(): string {
@@ -74,7 +78,10 @@ export function useCopilotAnalysis(update: (patch: (m: Meeting) => Meeting) => v
           meetingId: meeting.id,
           timestamp: new Date().toISOString(),
           stageId,
+          questionId: null, // Modo Call ainda não rastreia "pergunta em foco" separadamente da etapa
           trigger,
+          source: 'ai',
+          model: data.model ?? null,
           suggestion: data.suggestion,
         };
         update((m) => ({ ...m, copilotHistory: [...(m.copilotHistory ?? []), record] }));

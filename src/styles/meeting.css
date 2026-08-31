@@ -307,6 +307,7 @@
    Status de salvamento + botão de objeção em destaque
    ============================================================ */
 .call-save-status { color: var(--ink-400); font-weight: 400; text-transform: none; letter-spacing: 0; }
+.call-save-status-error { color: var(--abza-red-700); font-weight: 600; }
 .call-tool-btn.objection-btn { border-color: var(--abza-red-200); color: var(--abza-red-700); background: var(--abza-red-50); }
 .call-tool-btn.objection-btn:hover { border-color: var(--abza-red); color: var(--abza-red-700); }
 
