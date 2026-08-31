@@ -12,6 +12,21 @@ const url = import.meta.env.VITE_SUPABASE_URL;
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 /** null until VITE_SUPABASE_URL and a client-safe key are set (see .env.example).
- *  Never throws — src/store/index.ts checks this and falls back to
- *  localStorage automatically when it's null. */
-export const supabase: SupabaseClient | null = url && publishableKey ? createClient(url, publishableKey) : null;
+ *  Never throws — src/store/index.ts and src/auth/AuthContext.tsx both check
+ *  this and fall back to (respectively) localStorage and "auth disabled"
+ *  automatically when it's null. */
+export const supabase: SupabaseClient | null =
+  url && publishableKey
+    ? createClient(url, publishableKey, {
+        auth: {
+          // Explicit even though these are the client's own defaults — this
+          // is exactly the persistence Supabase Auth needs (session survives
+          // reload/new tab via localStorage, refreshed automatically before
+          // it expires). detectSessionInUrl is off: this app has no OAuth/
+          // magic-link redirect flow, only email+password.
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+        },
+      })
+    : null;

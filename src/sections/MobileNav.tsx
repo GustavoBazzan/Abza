@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Logo, Symbol } from '../components/Brand';
 import { AreaSwitcher } from '../components/AreaSwitcher';
+import { AccountMenu } from '../components/AccountMenu';
 import { NAV } from '../data/content';
 
 interface MobileNavProps {
@@ -8,9 +9,11 @@ interface MobileNavProps {
   progress: number;
   onNavigate: (id: string) => void;
   onNavigateArea: (path: string) => void;
+  onSignOut?: () => void;
+  userEmail?: string;
 }
 
-export function MobileNav({ active, progress, onNavigate, onNavigateArea }: MobileNavProps) {
+export function MobileNav({ active, progress, onNavigate, onNavigateArea, onSignOut, userEmail }: MobileNavProps) {
   const [open, setOpen] = useState(false);
   const pct = Math.round(progress * 100);
 
@@ -98,6 +101,8 @@ export function MobileNav({ active, progress, onNavigate, onNavigateArea }: Mobi
                 <div className="progress-fill" style={{ width: `${pct}%` }} />
               </div>
             </div>
+
+            {onSignOut && <AccountMenu userEmail={userEmail} onSignOut={onSignOut} className="mobile-nav-account-menu" />}
           </div>
         </div>
       )}

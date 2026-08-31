@@ -1,5 +1,6 @@
 import { Logo } from '../components/Brand';
 import { AreaSwitcher } from '../components/AreaSwitcher';
+import { AccountMenu } from '../components/AccountMenu';
 import { NAV } from '../data/content';
 
 interface SidebarProps {
@@ -7,9 +8,11 @@ interface SidebarProps {
   progress: number;
   onNavigate: (id: string) => void;
   onNavigateArea: (path: string) => void;
+  onSignOut?: () => void;
+  userEmail?: string;
 }
 
-export function Sidebar({ active, progress, onNavigate, onNavigateArea }: SidebarProps) {
+export function Sidebar({ active, progress, onNavigate, onNavigateArea, onSignOut, userEmail }: SidebarProps) {
   const pct = Math.round(progress * 100);
   return (
     <aside className="sidebar">
@@ -42,6 +45,8 @@ export function Sidebar({ active, progress, onNavigate, onNavigateArea }: Sideba
           <div className="progress-fill" style={{ width: `${pct}%` }} />
         </div>
       </div>
+
+      {onSignOut && <AccountMenu userEmail={userEmail} onSignOut={onSignOut} className="sidebar-account-menu" />}
     </aside>
   );
 }

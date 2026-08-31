@@ -25,9 +25,12 @@ interface AppProps {
   onNavigateArea: (path: string) => void;
   /** technique num (TECH[].num) to auto-open — used for deep links from Scripts de Reunião */
   openTechniqueNum?: string;
+  /** undefined when Supabase Auth isn't configured — no sign-out control renders. */
+  onSignOut?: () => void;
+  userEmail?: string;
 }
 
-export default function App({ onNavigateArea, openTechniqueNum }: AppProps) {
+export default function App({ onNavigateArea, openTechniqueNum, onSignOut, userEmail }: AppProps) {
   const [active, setActive] = useState(0);
   const [progress, setProgress] = useState(0);
   const [step, setStep] = useState(0);
@@ -93,10 +96,10 @@ export default function App({ onNavigateArea, openTechniqueNum }: AppProps) {
 
   return (
     <div className="app">
-      <Sidebar active={active} progress={progress} onNavigate={scrollToId} onNavigateArea={onNavigateArea} />
+      <Sidebar active={active} progress={progress} onNavigate={scrollToId} onNavigateArea={onNavigateArea} onSignOut={onSignOut} userEmail={userEmail} />
 
       <main className="main">
-        <MobileNav active={active} progress={progress} onNavigate={scrollToId} onNavigateArea={onNavigateArea} />
+        <MobileNav active={active} progress={progress} onNavigate={scrollToId} onNavigateArea={onNavigateArea} onSignOut={onSignOut} userEmail={userEmail} />
         <Hero onExplore={goExplore} onTechniques={goTechniques} />
         <Philosophy />
         <Anatomy />

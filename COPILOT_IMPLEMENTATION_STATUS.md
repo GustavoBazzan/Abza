@@ -4,7 +4,7 @@
 > deve ler este arquivo inteiro antes de tocar em qualquer código. Nunca
 > contém secrets — só nomes de variáveis de ambiente, nunca valores.
 
-Última atualização: **Checkpoint 1b — Auditoria da integração Supabase + migrations preparadas** (ainda aguardando respostas do questionário do Checkpoint 1).
+Última atualização: **Checkpoint 1c — Supabase Auth implementado (login/logout, sessão, rotas protegidas)** (ainda aguardando respostas do questionário do Checkpoint 1 sobre o Copilot em si — usuários/produtos/comportamento do agente).
 
 ---
 
@@ -59,12 +59,25 @@ Não é um chatbot genérico. Não inventa preço, fato ou resposta do cliente.
   vezes não quebra nada), RLS testado com insert real (bloqueia sem
   `authenticated`, libera com `authenticated`). **Nunca aplicados contra o
   projeto Supabase real do Gustavo** — isso é ação manual dele (ver seção 7).
-- **Autenticação**: **nenhuma existe no projeto hoje** (nem UI de login, nem
-  sessão). O schema já está preparado para Supabase Auth (RLS exige
-  `authenticated`, `meetings.owner_id` referencia `auth.users`), mas a parte
-  de front-end (tela de login, gestão de sessão) ainda não foi construída —
-  isso é trabalho futuro, fora do escopo desta auditoria. `/api/copilot`
-  continua aberto para qualquer requisição POST bem formada.
+- **Autenticação**: **Supabase Auth implementado de ponta a ponta no
+  frontend.** Só e-mail+senha, sem cadastro público (contas criadas
+  manualmente no Dashboard — ver seção 10). `src/auth/AuthContext.tsx`
+  (provider + `getSession`/`onAuthStateChange`) + `src/auth/useAuth.ts` +
+  `src/auth/LoginPage.tsx` (`/login`, sem link de cadastro). `Root.tsx`
+  redireciona para `/login` quando não autenticado e protege Playbook,
+  Scripts e Reuniões; sessão persiste via `persistSession`/`autoRefreshToken`
+  do próprio `supabase-js` (localStorage do navegador, gerenciado pelo SDK).
+  Botão "Sair" (`AccountMenu`) na Sidebar/MobileNav do Playbook e na
+  MeetingTopBar de Scripts/Reuniões. Se `VITE_SUPABASE_URL`/`PUBLISHABLE_KEY`
+  não estiverem configuradas, a autenticação fica desativada automaticamente
+  (mesma filosofia de fallback do resto do projeto) — comportamento
+  confirmado sem regressão nesta sessão.
+  **Gap conhecido, ainda não fechado**: essa proteção é a nível de
+  página (frontend). `/api/copilot` **ainda não verifica a sessão no
+  servidor** — continua aceitando qualquer POST bem formado, autenticado ou
+  não, na Vercel. Fechar isso é validar o JWT do Supabase dentro de
+  `api/copilot.ts` — próximo passo natural, não feito nesta etapa porque não
+  foi pedido explicitamente agora.
 
 ---
 
@@ -79,12 +92,12 @@ Não é um chatbot genérico. Não inventa preço, fato ou resposta do cliente.
 | 4 | Área Reuniões mostrando insights do Copilot | **Não implementada** — `MeetingDetail.tsx` ainda não exibe `copilotHistory` |
 | 5 | Radar comercial (13 dimensões, prontidão determinística) | **Parcial** — `closingRules.ts`/`qualificationRules.ts` já têm heurística determinística de decisão de etapa (reaproveitável), mas não o radar completo com as 13 dimensões e os 3 estados de prontidão pedidos agora |
 | 6 | Suíte de avaliação (10 casos) | **Não implementada** |
-| 7 | Segurança/abuso do endpoint público | **Não implementada — risco real hoje** (ver seção 5) |
+| 7 | Segurança/abuso do endpoint público | **Parcial** — páginas protegidas por login (novo). `/api/copilot` em si ainda **não** valida sessão no servidor — risco de uso indevido direto no endpoint continua real (ver seção 5) |
 | 8 | Privacidade / minimização de dados | **Parcial** — Context Builder já não envia dado irrelevante, mas não há função de redação/sanitização de PII |
 | 9 | Configuração de modelo via variável | **Parcial** — hoje é `OPENAI_MODEL` com default `gpt-4o-mini` hardcoded em um único arquivo (fácil de trocar); pedido atual quer `OPENAI_COPILOT_MODEL` + `OPENAI_COPILOT_REASONING` com defaults novos |
 | 10 | Teste real (mock + OpenAI real) | Mock testado em sessão anterior; **OpenAI real nunca foi testada neste sandbox** (sem acesso à internet para api.openai.com) |
 | 11 | Vercel | Sem `vercel.json` (zero-config, correto para este projeto) |
-| 12 | Supabase (migrations, RLS) | **Migrations prontas e validadas** (`supabase/migrations/0001` e `0002`) — RLS testado de verdade, sem `using(true)`. **Não aplicadas** no projeto real (ação manual do Gustavo, ver seção 7). Login/Auth UI ainda não construído. |
+| 12 | Supabase (migrations, RLS) | **Migrations prontas e validadas** (`supabase/migrations/0001` e `0002`) — RLS testado de verdade, sem `using(true)`, `meetings.owner_id default auth.uid()`. **Não aplicadas** no projeto real (ação manual do Gustavo, ver seção 7). **Login/Auth UI implementado** (login, logout, sessão persistente, rotas protegidas) — testado de ponta a ponta com um servidor GoTrue fake nesta sessão. |
 | 13 | Read AI | Não implementada (conforme pedido) — arquitetura já preparada (`DataSource: 'manual'\|'transcription'\|'ai'` em `Answer`/`ObjectionEvent`) |
 | 14 | Pricing Engine | Não implementada (conforme pedido) — `PricingInfo` isolado, `salesRules` já proíbe IA inventar preço |
 
@@ -102,6 +115,7 @@ Não é um chatbot genérico. Não inventa preço, fato ou resposta do cliente.
 - **3 gatilhos**: manual (botão sempre disponível), automático ao concluir Qualificação/Diagnóstico/Devolução/Escopo, automático ao registrar objeção. Testado com Playwright contra servidor fake — todos os 3 confirmados funcionando corretamente.
 - **Responsividade**: testada em 360/375/390/412/430px nas telas do Copilot — touch, z-index, pointer-events, scroll lock revisados.
 - **`OBJECTION_PLAYBOOK`**: 10 tipos de objeção com o que fazer/não fazer/pergunta/técnica.
+- **Autenticação** (`src/auth/`): `AuthProvider`/`useAuth`/`LoginPage`, só e-mail+senha, sem cadastro público. `AccountMenu` (`src/components/`) — usado em Sidebar, MobileNav e MeetingTopBar. Rotas protegidas via `Root.tsx`; `#/login` como rota própria no router hash-based.
 - **Build/deploy**: `npm run build` (tsc -b + vite build), `npm run build:api` (typecheck isolado de `api/`+`scripts/`), `npm run lint` (oxlint), `npm run test:copilot` (script de teste em processo). Deploy Vercel zero-config (sem `vercel.json`), branch atual `claude/abza-sales-playbook-mhar8t`.
 
 ---
@@ -115,12 +129,22 @@ Não é um chatbot genérico. Não inventa preço, fato ou resposta do cliente.
 - Nenhuma chamada de IA a cada tecla — só nos 3 gatilhos definidos.
 - Endpoint recebe a reunião inteira no corpo (`{ meeting }`) em vez de buscar por id, porque a persistência hoje é client-side — reavaliar se/quando Supabase virar obrigatório.
 
-**Risco de segurança identificado nesta auditoria (não ignorado, ver questionário):**
-`/api/copilot` está publicamente acessível, sem autenticação, sem rate limit
-por usuário/IP, sem limite de tamanho de payload além do default da Vercel.
-Qualquer pessoa com a URL pode gastar créditos da conta OpenAI da ABZA
-indefinidamente. **Isso precisa ser resolvido antes de qualquer divulgação
-pública do link** — ver questionário, seção A/G.
+**Risco de segurança — parcialmente resolvido, não fechado:**
+As páginas (Playbook/Scripts/Reuniões) agora exigem login. Mas
+`/api/copilot` continua publicamente acessível por si só — sem verificação
+de sessão no servidor, sem rate limit por usuário/IP, sem limite de tamanho
+de payload além do default da Vercel. Alguém com a URL do endpoint (não da
+página) ainda pode chamá-lo diretamente e gastar créditos da conta OpenAI da
+ABZA. **Recomendo fechar isso validando o JWT do Supabase dentro de
+`api/copilot.ts`** antes de considerar o Copilot pronto para uso real —
+posso implementar isso quando você quiser.
+
+- Modelo de RLS escolhido: **qualquer usuário autenticado vê/edita todas as
+  reuniões** (histórico compartilhado do time comercial — combina com a UI
+  atual de Reuniões, que já lista tudo sem filtro por dono). `owner_id` em
+  `meetings` guarda quem criou cada reunião (atribuição), mas **não**
+  restringe quem pode ler — se vocês quiserem "cada um só vê o que é seu"
+  no futuro, é uma troca pequena de policy, não de schema.
 
 ---
 
@@ -147,6 +171,10 @@ Nenhuma `service_role`/secret key é usada em lugar nenhum do projeto — nunca 
 - **Validadas de verdade** contra Postgres 16 local nesta sessão: rodam sem erro, idempotentes, RLS testado com insert real (nego + permite). Ver seção 8.
 - `supabase/schema.sql` (arquivo antigo, achatado) foi substituído por um ponteiro para `supabase/migrations/` — não há mais duas fontes de verdade do schema.
 - **Nunca aplicadas contra o Supabase real** — ação manual do Gustavo, ver mensagem de entrega desta auditoria para o passo a passo exato.
+- **Auditoria desta etapa (implementação de Auth)**: nenhuma alteração de
+  migration foi necessária — `owner_id default auth.uid()` e a RLS
+  `authenticated`-only já cobriam os requisitos de "associar reunião ao
+  usuário" e "impedir acesso não autorizado" desde a auditoria anterior.
 
 ---
 
@@ -159,15 +187,31 @@ Nenhuma `service_role`/secret key é usada em lugar nenhum do projeto — nunca 
 - Frontend testado com Playwright contra um servidor fake (mesmo contrato HTTP) — 3 gatilhos, 7 blocos, desktop/mobile, estado de erro, tudo confirmado.
 - **OpenAI real nunca foi testada neste sandbox atual** — sem acesso de rede a `api.openai.com` neste ambiente.
 - Migrations 0001+0002 testadas contra Postgres 16 local: aplicação limpa, reaplicação idempotente, RLS validado com insert real negado (role `anon`) e permitido (role `authenticated`), insert real em `meeting_copilot_insights` com todos os CHECK de enum aceitando os valores esperados.
+- **Auth testado de ponta a ponta** com Playwright contra um servidor GoTrue
+  fake (mesmo contrato HTTP do Supabase Auth real — `/auth/v1/token`,
+  `/auth/v1/logout`) nesta sessão: acesso direto a `/scripts`, `/reunioes`,
+  `/playbook` sem sessão redireciona para `/login`; credenciais erradas
+  mostram erro em português e não avançam; login correto libera as 3 áreas,
+  mostra e-mail + botão Sair na Sidebar/MobileNav/MeetingTopBar; sessão
+  sobrevive a um reload de página; sair redireciona para `/login` e a
+  proteção volta a valer imediatamente. Testado em 360/390/430px (touch,
+  sem overflow, alvos de toque ≥44px). Testado também **sem** Supabase
+  configurado — confirmado zero regressão (app funciona exatamente como
+  antes, nenhum botão de conta aparece).
 
 ---
 
 ## 9. Próximo passo exato
 
-**Aguardando o Gustavo responder ao questionário consolidado** (enviado
-junto com este arquivo). Depois das respostas:
-1. Consolidar decisões aqui neste arquivo.
-2. Apresentar plano curto por fase.
-3. Implementar por fases pequenas, cada uma com typecheck + lint + teste + build + commit descritivo, validando com o Gustavo antes de avançar para a próxima.
+**Ainda aguardando o Gustavo responder ao questionário consolidado do
+Checkpoint 1** (usuários/produtos/comportamento do Copilot) — a
+implementação de Auth desta sessão foi um pedido à parte, já concluída.
 
-Nenhuma alteração de código foi feita nesta sessão além deste arquivo.
+Ação manual pendente do Gustavo: criar o primeiro usuário no Supabase
+Dashboard (ver mensagem de entrega desta etapa) e configurar
+`VITE_SUPABASE_URL`/`VITE_SUPABASE_PUBLISHABLE_KEY` na Vercel + rodar as
+migrations — sem isso, o Auth fica automaticamente desativado (app
+continua funcionando, só sem exigir login).
+
+Sugestão de próximo passo técnico (não decidido, oferecido): validar o JWT
+do Supabase dentro de `api/copilot.ts` para fechar o gap descrito na seção 5.

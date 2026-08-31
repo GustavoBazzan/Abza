@@ -1,0 +1,68 @@
+/* ============================================================
+   Login — tela única, sem cadastro público. Segue a identidade
+   visual existente (mesmos tokens de src/styles/tokens.css).
+   ============================================================ */
+.login-shell {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: #FAF9F7; padding: 24px;
+}
+.login-card {
+  width: 100%; max-width: 380px; background: #FFFFFF; border: 1px solid var(--ink-150);
+  border-radius: var(--radius-xl); padding: 40px 32px; display: flex; flex-direction: column;
+  align-items: center; gap: 22px; box-shadow: var(--shadow-lg);
+}
+.login-heading { text-align: center; display: flex; flex-direction: column; gap: 6px; }
+.login-title { font-family: var(--font-display); font-size: 21px; font-weight: 700; letter-spacing: -0.02em; margin: 0; color: var(--ink-900); }
+.login-subtitle { font-size: 13.5px; line-height: 1.5; color: var(--ink-500); margin: 0; }
+
+.login-field { width: 100%; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.login-field span { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-500); }
+.login-field input {
+  width: 100%; font-family: var(--font-text); font-size: 15px; padding: 12px 14px;
+  border: 1.5px solid var(--ink-200); border-radius: var(--radius-md); background: #FFFFFF;
+  color: var(--ink-900); min-height: 48px;
+}
+.login-field input:focus { border-color: var(--abza-red); outline: none; }
+.login-field input:disabled { opacity: .6; }
+
+.login-error {
+  width: 100%; background: var(--abza-red-50); border: 1px solid var(--abza-red-200); color: var(--abza-red-700);
+  border-radius: var(--radius-md); padding: 10px 14px; font-size: 13px; font-weight: 600; margin: 0; text-align: left;
+}
+
+/* ============================================================
+   AccountMenu — e-mail + Sair, renderizado nas 3 áreas autenticadas.
+   ============================================================ */
+.account-menu { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.account-menu-email {
+  font-family: var(--font-mono); font-size: 10px; color: var(--ink-500);
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.account-menu-signout {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+  border: 1px solid var(--ink-200); background: #FFFFFF; color: var(--ink-700); border-radius: var(--radius-pill);
+  padding: 0 14px; height: 36px; min-height: 36px; cursor: pointer; white-space: nowrap; flex: 0 0 auto;
+}
+.account-menu-signout:hover { border-color: var(--ink-900); color: var(--ink-900); }
+
+/* Sidebar (desktop Playbook) — mesmo ritmo visual de .sidebar-progress. */
+.sidebar-account-menu {
+  padding: 16px 28px 0; margin-top: 16px; border-top: 1px solid var(--ink-150);
+  justify-content: space-between;
+}
+
+/* Mobile nav sheet (Playbook) — mesma largura do painel, alinhado ao rodapé do conteúdo. */
+.mobile-nav-account-menu {
+  padding: 16px 20px 0; margin: 8px 20px 0; border-top: 1px solid var(--ink-150);
+  justify-content: space-between;
+}
+
+/* Meeting topbar (Scripts/Reuniões) — item final da barra horizontal. */
+.meeting-topbar-account-menu { flex: 0 0 auto; }
+
+@media (max-width: 720px) {
+  .login-card { padding: 32px 22px; }
+  .account-menu-signout { min-height: 44px; height: 44px; }
+  .account-menu-email { display: none; }
+  .sidebar-account-menu, .mobile-nav-account-menu { justify-content: flex-end; }
+}

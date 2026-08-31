@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 // which are always followed by preventDefault() and never touch the hash.
 
 export type Route =
+  | { name: 'login' }
   | { name: 'playbook'; openTechniqueNum?: string }
   | { name: 'scripts-home' }
   | { name: 'meeting-setup'; productId: string }
@@ -16,6 +17,10 @@ export type Route =
 function parseHash(hash: string): Route {
   const clean = hash.replace(/^#\/?/, '');
   const parts = clean.split('/').filter(Boolean).map(decodeURIComponent);
+
+  if (parts[0] === 'login') {
+    return { name: 'login' };
+  }
 
   if (parts[0] === 'scripts') {
     if (parts.length < 2) return { name: 'scripts-home' };
@@ -43,6 +48,7 @@ function parseHash(hash: string): Route {
 
 export function routePath(route: Route): string {
   switch (route.name) {
+    case 'login': return '/login';
     case 'scripts-home': return '/scripts';
     case 'meeting-setup': return `/scripts/${route.productId}`;
     case 'call-mode': return `/scripts/${route.productId}/call/${route.meetingId}`;
