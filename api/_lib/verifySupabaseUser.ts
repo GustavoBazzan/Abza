@@ -15,8 +15,15 @@
 //
 // Este arquivo fica em api/_lib/ (prefixo `_`) para a Vercel nunca tratá-lo
 // como uma rota própria — é só código compartilhado.
-
-import { createClient } from '@supabase/supabase-js';
+//
+// @supabase/supabase-js é importado DINAMICAMENTE dentro de
+// verifySupabaseUser() (não no topo do arquivo) de propósito: um import
+// estático aqui seria carregado incondicionalmente sempre que
+// api/copilot.ts importa este módulo — mesmo para um GET, que nem chega a
+// chamar esta função. Isolar o carregamento do SDK só para quando ele é de
+// fato necessário reduz a superfície de qualquer falha de carregamento do
+// pacote a apenas os casos que realmente precisam dele.
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface VerifiedUser {
   id: string;
@@ -29,8 +36,11 @@ export type VerifyAuthResult =
    *  VITE_SUPABASE_URL/KEY) — mesmo estado em que o frontend também não
    *  exige login (ver src/auth/AuthContext.tsx). 'missing_token': nenhum
    *  Authorization Bearer foi enviado. 'invalid_token': token presente mas
-   *  a Supabase recusou (inválido, expirado, ou malformado). */
-  | { ok: false; reason: 'not_configured' | 'missing_token' | 'invalid_token' };
+   *  a Supabase recusou (inválido, expirado, ou malformado). 'internal_error':
+   *  falha ao carregar/usar o SDK da Supabase — nunca deve ser tratado como
+   *  "auth desativada"; o chamador precisa falhar fechado (401/500), nunca
+   *  seguir sem exigir login. */
+  | { ok: false; reason: 'not_configured' | 'missing_token' | 'invalid_token' | 'internal_error' };
 
 function getSupabaseServerConfig(): { url: string; key: string } | null {
   const url = process.env.VITE_SUPABASE_URL;
@@ -56,13 +66,20 @@ export async function verifySupabaseUser(authHeader: string | string[] | undefin
   const token = extractBearerToken(authHeader);
   if (!token) return { ok: false, reason: 'missing_token' };
 
-  // persistSession/autoRefreshToken desligados: este client é descartável,
-  // usado uma única vez por requisição, sem localStorage (nem existe em
-  // Node) e sem nenhum timer de background — não pode ficar "pendurado"
-  // numa função serverless.
-  const client = createClient(config.url, config.key, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
+  let client: SupabaseClient;
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    // persistSession/autoRefreshToken desligados: este client é descartável,
+    // usado uma única vez por requisição, sem localStorage (nem existe em
+    // Node) e sem nenhum timer de background — não pode ficar "pendurado"
+    // numa função serverless.
+    client = createClient(config.url, config.key, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+  } catch (err) {
+    console.error('[verifySupabaseUser] falha ao carregar/inicializar @supabase/supabase-js —', err instanceof Error ? err.name : typeof err);
+    return { ok: false, reason: 'internal_error' };
+  }
 
   const { data, error } = await client.auth.getUser(token);
   if (error || !data?.user) return { ok: false, reason: 'invalid_token' };

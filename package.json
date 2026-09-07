@@ -10,6 +10,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test:copilot": "tsx scripts/test-copilot.ts",
+    "test:copilot:smoke": "tsx scripts/test-copilot-smoke.ts",
     "validate:production": "bash scripts/production-validation.sh"
   },
   "dependencies": {

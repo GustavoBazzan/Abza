@@ -4,7 +4,7 @@
 > deve ler este arquivo inteiro antes de tocar em qualquer código. Nunca
 > contém secrets — só nomes de variáveis de ambiente, nunca valores.
 
-Última atualização: **Checkpoint 1f — migrations aplicadas no Supabase real pelo Gustavo (fora desta sessão) e primeiro usuário real criado; validação da integração real em produção entregue como script (`scripts/production-validation.sh`) para rodar fora do sandbox — ver seção 12** (ainda aguardando respostas do questionário do Checkpoint 1 sobre o Copilot em si — usuários/produtos/comportamento do agente).
+Última atualização: **Checkpoint 1g — corrigido runtime de `/api/copilot` que retornava `FUNCTION_INVOCATION_FAILED` em produção (imports estáticos de `openai`/`@supabase/supabase-js` agora são dinâmicos, carregados só depois de método+auth+payload validados) — ver seção 13. Aguardando o Gustavo rodar `production-validation.sh` de novo para confirmar** (ainda aguardando respostas do questionário do Checkpoint 1 sobre o Copilot em si — usuários/produtos/comportamento do agente).
 
 ---
 
@@ -505,3 +505,105 @@ interpretar o resultado e fechar o relatório final dos 12 itens.
 originalmente no chat pelo Gustavo (não deveria — reforcei isso na hora).
 Recomendação: trocar essa senha (ou apagar esse usuário de teste) no
 Supabase Dashboard assim que a validação terminar.
+
+---
+
+## 13. Incidente: `/api/copilot` retornava `FUNCTION_INVOCATION_FAILED` em produção (Checkpoint 1g)
+
+**Sintoma reportado pelo Gustavo** ao rodar `production-validation.sh` de
+verdade contra a Vercel: TODAS as chamadas a `/api/copilot` falhavam com
+`FUNCTION_INVOCATION_FAILED` (a página de erro genérica que a Vercel
+devolve quando uma função crasha) — **inclusive `GET`**, que deveria só
+cair no `405` sem tocar em nada mais. O restante (login real, escrita/
+leitura direta no Postgres via REST, RLS bloqueando anônimo) funcionou.
+
+**Causa raiz (mais provável — ver ressalva abaixo)**: `api/copilot.ts`
+importava o pacote `openai` de forma **estática**, no topo do arquivo
+(`import OpenAI from 'openai'`), e `api/_lib/verifySupabaseUser.ts`
+importava `@supabase/supabase-js` da mesma forma estática. Em ESM
+(`"type": "module"` no `package.json`, já existente no projeto), um
+`import` de nível superior é **sempre carregado ao avaliar o módulo**,
+antes de qualquer linha do handler rodar — inclusive para um `GET`, que
+retorna no primeiro `if`. Isso significa que, se o carregamento de
+qualquer um desses dois pacotes falhar sob o runtime específico da Vercel
+(um `require`/`import` incompatível, versão de Node diferente do que este
+sandbox usa, ou qualquer outro detalhe do bundling de função da Vercel que
+não é possível reproduzir aqui), a função inteira quebra **para toda e
+qualquer requisição**, exatamente o padrão observado (até o `GET` falhava).
+`tsx` local (usado nos testes desta sessão) não expõe esse tipo de
+problema porque resolve módulos de um jeito mais tolerante que o bundler
+real da Vercel — por isso isso nunca apareceu nos testes anteriores.
+
+**Ressalva honesta**: sem acesso ao log real da função na Vercel, não dá
+para confirmar com 100% de certeza que este import estático era exatamente
+a causa (só que é a explicação mais coerente com "até GET quebra"). Por
+isso a correção abaixo também inclui logging por estágio — se o problema
+persistir depois deste deploy, o log da Vercel vai mostrar exatamente em
+qual `copilot:*` a execução parou, ou se nem chegou a `copilot:start`
+(o que apontaria para outro import estático em algum lugar ainda não
+identificado).
+
+### Correção aplicada
+
+1. **`import OpenAI from 'openai'` (estático) → `import type OpenAI from 'openai'`**
+   (só o tipo, apagado na compilação) **+ `await import('openai')` dinâmico
+   dentro do handler**, feito só depois de método + auth + payload já
+   validados (passo 5, exatamente a ordem pedida). `handleOpenAiError` agora
+   recebe o módulo já carregado como parâmetro em vez de importar
+   estaticamente.
+2. **`import { createClient } from '@supabase/supabase-js'` (estático) em
+   `verifySupabaseUser.ts` → `import type { SupabaseClient }` + `await
+   import('@supabase/supabase-js')` dinâmico dentro da função**, no ponto
+   exato em que o client é criado (depois de já confirmar que há token pra
+   validar).
+3. Nova falha possível `'internal_error'` em `VerifyAuthResult` — se o
+   import dinâmico do SDK da Supabase falhar, a função **nunca** trata isso
+   como "auth desativada" (que deixaria a OpenAI ser chamada sem sessão);
+   responde `500` e para ali, falhando fechado.
+4. **Logging por estágio**, só com nome do estágio e (em erro) nome/tipo do
+   erro — nunca corpo da requisição, header `Authorization`, JWT,
+   `OPENAI_API_KEY` ou payload do cliente: `copilot:start`,
+   `copilot:method_validated`, `copilot:auth_header_present` (booleano),
+   `copilot:auth_validated` (ou `copilot:auth_rejected`/`auth_error` com só
+   o motivo), `copilot:payload_validated`, `copilot:openai_start`,
+   `copilot:openai_success`, e `copilot:error` (estágio + nome do erro +
+   mensagem truncada a 300 caracteres — as mensagens do nosso próprio
+   código, como `supabase: falha ao gravar em meetings (PGRST301)`, só têm
+   nome de tabela/código Postgres, nunca dado sensível).
+
+### Variáveis de ambiente — auditadas, sem mudança de nome necessária
+
+Conferido que o código já lê exatamente os 5 nomes que o Gustavo confirmou
+existirem na Vercel — nenhuma variável faltando, nenhum nome incompatível:
+`OPENAI_API_KEY`, `OPENAI_COPILOT_MODEL` (com fallback legado para
+`OPENAI_MODEL`), `OPENAI_COPILOT_REASONING`, `VITE_SUPABASE_URL`,
+`VITE_SUPABASE_PUBLISHABLE_KEY` (com fallback legado para
+`VITE_SUPABASE_ANON_KEY`). Nenhum `import.meta.env` existe em código
+server-side (`api/`) — confirmado por busca no repositório inteiro; a
+única ocorrência do projeto é em `src/store/supabaseClient.ts`
+(client-side, correto) e **não é importada, direta ou indiretamente, por
+`api/copilot.ts`** (rastreado import por import).
+
+### Testes realizados nesta sessão
+
+- **`npm run test:copilot:smoke`** (novo, permanente): importa o handler
+  real e confirma que o import por si só não lança, `GET -> 405`, e
+  `POST` sem `Authorization` nunca chega a chamar a OpenAI — roda sem
+  nenhuma variável de ambiente.
+- Regressão completa da auth/rate-limit/payload (mesmos 5 casos das etapas
+  anteriores) contra um servidor GoTrue fake real, confirmando que o
+  refactor não mudou nenhum comportamento externo — só quando os imports
+  pesados são carregados.
+- Confirmado que o `import('openai')` dinâmico realmente executa e chega a
+  tentar a chamada de rede de verdade (bloqueada pela política deste
+  sandbox, como já era esperado — mas provou que o import dinâmico
+  funciona e o erro de rede é tratado sem vazar nada).
+- Typecheck (`tsc -b` + `tsc --noEmit -p tsconfig.server.json`), lint e
+  build: limpos.
+- **Não testado contra a Vercel real** — só o Gustavo pode confirmar isso,
+  rodando `bash scripts/production-validation.sh` de novo.
+
+### Arquivos alterados
+
+`api/copilot.ts`, `api/_lib/verifySupabaseUser.ts`, `package.json` (novo
+script `test:copilot:smoke`), `scripts/test-copilot-smoke.ts` (novo).

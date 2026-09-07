@@ -27,8 +27,17 @@
 // useActiveMeeting). Quando existir um backend de persistência sempre
 // ativo, dá para trocar para `{ meetingId }` + busca server-side sem mudar
 // o contrato de resposta.
-
-import OpenAI from 'openai';
+//
+// IMPORTANTE (incidente de produção — FUNCTION_INVOCATION_FAILED em toda
+// requisição, inclusive GET): o pacote `openai` era importado estaticamente
+// no topo do arquivo, então seu carregamento acontecia incondicionalmente
+// para QUALQUER invocação desta função, antes mesmo de o método ser
+// checado. `import type OpenAI from 'openai'` abaixo é só o TIPO (apagado
+// na compilação — não carrega o pacote); o valor real só é importado
+// dinamicamente dentro do handler, depois que método + auth + payload já
+// passaram (ver passo 5). Isso também é exatamente o que a seção 2/5 deste
+// checkpoint pediu: a OpenAI nunca deve ser inicializada antes disso.
+import type OpenAI from 'openai';
 import { buildCopilotPromptContext } from '../src/knowledge/copilotPromptContext';
 import { COPILOT_SUGGESTION_JSON_SCHEMA, type CopilotSuggestion } from '../src/knowledge/copilotSuggestion';
 import type { Meeting } from '../src/data/meeting';
@@ -125,23 +134,41 @@ function sendError(res: CopilotResponse, status: number, code: CopilotErrorCode,
   res.status(status).json({ error: { code, message } });
 }
 
+// Log de diagnóstico seguro: só estágio + tipo/código de erro, nunca dados
+// do chamador. `stage` acompanha o pedido de logging desta etapa
+// (copilot:start, copilot:method_validated, ... copilot:error).
+function logStage(stage: string, extra?: Record<string, unknown>): void {
+  console.log(`[api/copilot] copilot:${stage}`, extra ? JSON.stringify(extra) : '');
+}
+
+function logError(stage: string, err: unknown): void {
+  const name = err instanceof Error ? err.name : typeof err;
+  const message = err instanceof Error ? err.message : undefined;
+  // Mensagens de erro do nosso próprio código (ex.: "supabase: falha ao
+  // gravar em meetings (PGRST301)") não contêm segredo — só o nome da
+  // tabela/código Postgres. Nunca é o corpo da requisição do cliente, nunca
+  // é um header, nunca é uma chave. Ainda assim truncamos por segurança.
+  console.error('[api/copilot] copilot:error', JSON.stringify({ stage, name, message: message?.slice(0, 300) }));
+}
+
 function isMeeting(value: unknown): value is Meeting {
   if (!value || typeof value !== 'object') return false;
   const m = value as Record<string, unknown>;
   return typeof m.id === 'string' && typeof m.productId === 'string' && typeof m.currentStageIndex === 'number';
 }
 
-/** Mapeia erros do SDK da OpenAI para uma resposta HTTP segura — nunca repassa stack trace ou corpo bruto do provedor. */
-function handleOpenAiError(res: CopilotResponse, err: unknown): void {
-  if (err instanceof OpenAI.APIConnectionTimeoutError) {
-    console.error('[api/copilot] timeout na chamada à OpenAI');
+/** Mapeia erros do SDK da OpenAI para uma resposta HTTP segura — nunca repassa stack trace ou corpo bruto do provedor.
+ *  Recebe o módulo `openai` já carregado (import dinâmico feito no handler) em vez de importá-lo estaticamente aqui. */
+function handleOpenAiError(res: CopilotResponse, err: unknown, OpenAIModule: typeof OpenAI): void {
+  if (err instanceof OpenAIModule.APIConnectionTimeoutError) {
+    logError('openai_timeout', err);
     sendError(res, 504, 'timeout', 'A IA demorou demais para responder. Tente novamente.');
     return;
   }
 
-  if (err instanceof OpenAI.RateLimitError) {
+  if (err instanceof OpenAIModule.RateLimitError) {
     const isQuota = err.code === 'insufficient_quota' || /insufficient_quota|quota/i.test(err.message ?? '');
-    console.error('[api/copilot] rate limit/quota da OpenAI', err.code ?? '(sem código)');
+    logError(isQuota ? 'openai_quota' : 'openai_rate_limit', err);
     if (isQuota) {
       sendError(res, 402, 'insufficient_quota', 'Créditos da conta OpenAI esgotados. Verifique o faturamento da conta.');
       return;
@@ -150,46 +177,60 @@ function handleOpenAiError(res: CopilotResponse, err: unknown): void {
     return;
   }
 
-  if (err instanceof OpenAI.AuthenticationError) {
-    console.error('[api/copilot] OPENAI_API_KEY inválida ou revogada');
+  if (err instanceof OpenAIModule.AuthenticationError) {
+    logError('openai_authentication', err);
     sendError(res, 500, 'not_configured', 'A chave de IA configurada neste ambiente é inválida.');
     return;
   }
 
-  if (err instanceof OpenAI.APIError) {
-    console.error('[api/copilot] erro da API OpenAI', err.status);
+  if (err instanceof OpenAIModule.APIError) {
+    logError('openai_api_error', err);
     sendError(res, 502, 'upstream_error', 'A IA não conseguiu processar esta reunião agora.');
     return;
   }
 
-  console.error('[api/copilot] erro inesperado ao chamar a OpenAI');
+  logError('openai_unexpected', err);
   sendError(res, 500, 'upstream_error', 'Erro inesperado ao consultar o Copilot.');
 }
 
 export default async function handler(req: CopilotRequest, res: CopilotResponse): Promise<void> {
+  logStage('start');
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     sendError(res, 405, 'method_not_allowed', 'Use POST.');
     return;
   }
+  logStage('method_validated');
 
   // 1) Sessão Supabase — nada abaixo executa sem um usuário autenticado de
   // verdade (exceto quando este deployment não tem Supabase Auth
   // configurado, o mesmo estado em que o frontend também não exige login).
+  // verifySupabaseUser importa @supabase/supabase-js dinamicamente por
+  // dentro (ver api/_lib/verifySupabaseUser.ts) pelo mesmo motivo do
+  // OpenAI acima — só carrega o SDK quando o método já foi validado.
+  logStage('auth_header_present', { present: !!req.headers?.authorization });
   const authResult = await verifySupabaseUser(req.headers?.authorization);
   if (!authResult.ok) {
     if (authResult.reason === 'not_configured') {
       console.warn('[api/copilot] Supabase Auth não configurado neste ambiente — seguindo sem exigir login (mesmo fallback do frontend).');
+    } else if (authResult.reason === 'internal_error') {
+      // Falha ao carregar/usar o SDK da Supabase — nunca tratar como "auth
+      // desativada". Falha fechado: 500, nunca chega na OpenAI.
+      logStage('auth_error', { reason: authResult.reason });
+      sendError(res, 500, 'not_configured', 'Não foi possível validar a sessão agora. Tente novamente em instantes.');
+      return;
     } else {
-      console.warn('[api/copilot] requisição rejeitada:', authResult.reason);
+      logStage('auth_rejected', { reason: authResult.reason });
       sendError(res, 401, 'unauthorized', 'Sessão ausente, inválida ou expirada. Faça login novamente.');
       return;
     }
   }
+  logStage('auth_validated');
 
   // 2) Rate limit por usuário autenticado — só se sabemos quem é o chamador.
   if (authResult.ok && isRateLimited(authResult.user.id)) {
-    console.warn('[api/copilot] rate limit atingido para o usuário', authResult.user.id);
+    logStage('rate_limited');
     sendError(res, 429, 'rate_limited', 'Muitas análises em pouco tempo. Aguarde um instante e tente novamente.');
     return;
   }
@@ -227,13 +268,27 @@ export default async function handler(req: CopilotRequest, res: CopilotResponse)
   try {
     promptContext = buildCopilotPromptContext(meeting);
   } catch (err) {
-    console.error('[api/copilot] falha ao montar contexto a partir da reunião enviada', err instanceof Error ? err.message : '(erro desconhecido)');
+    logError('prompt_context', err);
     sendError(res, 400, 'invalid_request', 'Não foi possível interpretar os dados da reunião enviada.');
     return;
   }
+  logStage('payload_validated');
 
-  // 5) Só agora, com sessão validada e payload são, a OpenAI é chamada.
-  const client = new OpenAI({ apiKey });
+  // 5) Só agora — método, sessão e payload validados — o SDK da OpenAI é
+  // carregado e inicializado. Import dinâmico (não estático no topo do
+  // arquivo) para garantir que nada relacionado à OpenAI executa antes
+  // deste ponto, mesmo o carregamento do próprio pacote.
+  let OpenAIModule: typeof OpenAI;
+  try {
+    OpenAIModule = (await import('openai')).default;
+  } catch (err) {
+    logError('openai_import', err);
+    sendError(res, 500, 'upstream_error', 'Falha ao inicializar o serviço de IA.');
+    return;
+  }
+
+  logStage('openai_start');
+  const client = new OpenAIModule({ apiKey });
   const model = resolveModel();
   const reasoningEffort = resolveReasoningEffort();
 
@@ -260,7 +315,7 @@ export default async function handler(req: CopilotRequest, res: CopilotResponse)
 
     const raw = response.output_text;
     if (!raw) {
-      console.error('[api/copilot] resposta da OpenAI sem output_text — response id:', response.id, 'status:', response.status);
+      logError('openai_empty_output', new Error(`response id=${response.id} status=${response.status}`));
       sendError(res, 502, 'invalid_response', 'A IA não retornou uma resposta válida.');
       return;
     }
@@ -268,17 +323,18 @@ export default async function handler(req: CopilotRequest, res: CopilotResponse)
     let suggestion: CopilotSuggestion;
     try {
       suggestion = JSON.parse(raw) as CopilotSuggestion;
-    } catch {
-      console.error('[api/copilot] JSON inválido retornado pela OpenAI — response id:', response.id);
+    } catch (err) {
+      logError('openai_invalid_json', err);
       sendError(res, 502, 'invalid_response', 'A IA retornou uma resposta em formato inesperado.');
       return;
     }
 
+    logStage('openai_success');
     // `model` não é secreto (é só o nome do modelo configurado, ex.:
     // "gpt-5.6-terra") — devolvido para o frontend poder persistir qual
     // modelo gerou cada sugestão em meeting_copilot_insights.model.
     res.status(200).json({ suggestion, model });
   } catch (err) {
-    handleOpenAiError(res, err);
+    handleOpenAiError(res, err, OpenAIModule);
   }
 }
