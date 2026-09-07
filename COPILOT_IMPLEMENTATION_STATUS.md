@@ -4,7 +4,7 @@
 > deve ler este arquivo inteiro antes de tocar em qualquer código. Nunca
 > contém secrets — só nomes de variáveis de ambiente, nunca valores.
 
-Última atualização: **Checkpoint 1e — persistência real (Supabase) resiliente + histórico do Copilot persistido; migrations reais ainda NÃO aplicadas (bloqueado em autenticação da Supabase CLI, ver seção 11)** (ainda aguardando respostas do questionário do Checkpoint 1 sobre o Copilot em si — usuários/produtos/comportamento do agente).
+Última atualização: **Checkpoint 1f — migrations aplicadas no Supabase real pelo Gustavo (fora desta sessão) e primeiro usuário real criado; validação da integração real em produção entregue como script (`scripts/production-validation.sh`) para rodar fora do sandbox — ver seção 12** (ainda aguardando respostas do questionário do Checkpoint 1 sobre o Copilot em si — usuários/produtos/comportamento do agente).
 
 ---
 
@@ -414,48 +414,94 @@ antes de expandir escopo.
 
 ---
 
-## 11. Automação Supabase CLI — auditoria e bloqueio atual
+## 11. Automação Supabase CLI — encerrada (migrations aplicadas manualmente)
 
-**Auditoria feita nesta sessão**:
-- Supabase CLI: **não estava instalada** neste ambiente — instalada agora
-  (`npm install -g supabase`, versão 2.116.0). Isso resolve globalmente
-  para esta sessão; não é algo que precise ser repetido pelo Gustavo.
-- `supabase/config.toml`: **não existe** no repositório — o projeto nunca
-  foi inicializado com `supabase init`.
-- Vínculo com o projeto real: **nenhum** — sem `config.toml` linkado a
-  nenhum project ref.
-- Autenticação da CLI: **nenhuma** — `supabase projects list` devolve
-  `LegacyPlatformAuthRequiredError` (token de acesso ausente).
+Instalei a Supabase CLI neste ambiente (`npm install -g supabase`, v2.116.0)
+e configurei `SUPABASE_ACCESS_TOKEN` foi pedido ao Gustavo, mas um restart
+do container aconteceu antes da variável chegar a esta sessão. **O Gustavo
+aplicou as migrations `0001` e `0002` diretamente** (fora desta sessão, via
+Dashboard/CLI própria) — confirmado por ele: as 7 tabelas existem no
+projeto real e já há um usuário real criado no Supabase Auth. Com isso, a
+automação da CLI deixou de ser necessária para destravar o trabalho;
+`SUPABASE_ACCESS_TOKEN` pode ser removida do ambiente do Claude Code (o
+Gustavo confirmou que não precisamos mais dela).
 
-**Por que parei exatamente aqui**: autenticar a CLI é uma ação que só pode
-ser feita pelo dono da conta Supabase — gerar um token de acesso pessoal.
-Testei as duas rotas oficiais disponíveis num ambiente sem navegador/TTY
-(`supabase login` interativo e `supabase login --no-browser`) e ambas
-recusam por não haver terminal interativo aqui — a CLI pede explicitamente
-`--token` ou a variável de ambiente `SUPABASE_ACCESS_TOKEN`. Não vou pedir
-esse token colado no chat (regra explícita do Gustavo).
+**Não verificado por esta sessão diretamente** (sem acesso de rede ao
+Supabase real — ver seção 12): que o schema real bate 1:1 com as
+migrations versionadas (colunas, FKs, índices, constraints), e que as
+policies de RLS realmente aplicadas no projeto são exatamente as do
+arquivo (`authenticated full access` nas 7 tabelas, sem policy pública).
+O script da seção 12 testa o *comportamento* (RLS bloqueando anônimo,
+permitindo autenticado) mas não faz um diff coluna-a-coluna do schema.
+Se quiser essa conferência exata, rodar `supabase db diff --linked` (ou
+inspecionar Table Editor/Database → Roles/Policies no Dashboard) continua
+válido a qualquer momento.
 
-### AÇÃO MANUAL NECESSÁRIA
+---
 
-1. **Onde**: gere um Personal Access Token em
-   `https://supabase.com/dashboard/account/tokens` → "Generate new token"
-   (dê um nome como `abza-cli`). Copie o valor uma única vez.
-2. **O que fazer**: **não cole esse token no chat.** Adicione-o como
-   variável de ambiente **deste ambiente do Claude Code** (não é uma
-   variável da Vercel, é separada) chamada `SUPABASE_ACCESS_TOKEN`, com o
-   valor do token gerado — isso é exatamente o mecanismo oficial que a
-   própria Supabase documenta para autenticar a CLI em ambientes sem
-   navegador/CI. Isso é feito nas configurações do ambiente na interface do
-   Claude Code (claude.ai/code ou no app), não nesta conversa.
-3. **O que responder quando terminar**: só confirme que configurou a
-   variável (não precisa dizer o valor). Se este ambiente exigir uma nova
-   sessão para a variável ficar disponível no container, me avise disso
-   também, ou simplesmente me diga "configurei" e eu confirmo se a CLI já
-   enxerga o token.
+## 12. Validação da integração real em produção (Checkpoint 1f)
 
-Depois de autenticado, os próximos passos automáticos (sem nova ação sua,
-a não ser a criação do primeiro usuário — ver seção 6/9) são: descobrir o
-project ref via `supabase projects list`, mostrar project ref + nome antes
-de tocar no banco, `supabase link`, `supabase db push` com as duas
-migrations, depois auditoria de RLS/schema real, testes de segurança e
-funcionais de ponta a ponta.
+**Descoberta importante desta etapa**: o sandbox onde esta sessão roda
+**não tem acesso de rede geral** — bloqueado por política da organização,
+confirmado tentando alcançar três domínios diferentes (`abza-sales-playbook.vercel.app`,
+`supabase.com`, `api.openai.com` — todos os três recusados pelo proxy de
+saída com `connect_rejected`/política). Isso significa que, a partir desta
+sessão, **não é possível** rodar `curl`, Playwright ou qualquer chamada
+HTTP direta contra o site publicado, o Supabase real ou a OpenAI — não é
+específico deste projeto, é uma restrição de rede deste ambiente de
+execução.
+
+**Solução entregue**: `scripts/production-validation.sh` — um script único
+(`bash` + `curl` + `jq`, sem outras dependências) que roda no computador de
+quem tiver acesso normal à internet (o Gustavo) e testa a infraestrutura
+real de ponta a ponta:
+
+1. `/api/copilot` sem `Authorization` → `401` (sem token, item 7 do pedido).
+2. `/api/copilot` com Bearer forjado → `401`.
+3. `GET /api/copilot` → `405`.
+4. Login real via Supabase Auth REST (`/auth/v1/token`) com a conta de
+   teste (`TEST_USER_EMAIL`/`TEST_USER_PASSWORD`, lidas de variável de
+   ambiente — nunca impressas) → confirma autenticação real (item 1).
+5. `/api/copilot` com token real + payload inválido → `400`.
+6. `/api/copilot` com token real + reunião válida → **chamada real à
+   OpenAI em produção** (não mock) — imprime o resumo gerado pela IA e o
+   modelo usado (itens 8 e 9).
+7. Grava a mesma reunião direto no Postgres real via `/rest/v1/*` — mesmas
+   colunas que `supabaseStore.ts` usa — para `meetings`, `meeting_answers`
+   e `meeting_copilot_insights` (itens 2, 3, 10).
+8. Lê tudo de volta ("reload") para confirmar recuperação (itens 5 e 11).
+9. Tenta ler a mesma reunião **sem token** (só `apikey`) — confirma que a
+   RLS bloqueia usuário anônimo de verdade (item 6, lado do banco).
+10. Faz logout real (`/auth/v1/logout`) e repete a mesma chamada ao
+    `/api/copilot` reusando o token já "deslogado" — reporta o resultado
+    real observado (item 12), com a ressalva honesta de que um
+    access_token JWT pode continuar tecnicamente aceito até expirar mesmo
+    após logout (comportamento padrão de JWT stateless, não uma falha
+    desta implementação — o que protege de verdade é o app nunca reenviar
+    esse token depois do logout, e isso já foi validado no código/testes
+    desta sessão).
+11. Apaga a reunião de teste ao final (limpeza) nas 3 tabelas onde escreveu.
+
+**Descoberta automática de `SUPABASE_URL`/`SUPABASE_ANON_KEY`**: o script
+tenta extrair essas duas variáveis (nenhuma secreta — a "anon"/"publishable"
+key é client-safe por design, já está no bundle público do site) direto do
+JavaScript publicado, para o Gustavo não precisar procurá-las manualmente;
+aceita também serem passadas como variável de ambiente se a extração
+automática falhar.
+
+**Validado por esta sessão até agora**: o payload de reunião que o script
+envia foi testado localmente contra o handler real de `api/copilot.ts`
+(sem rede) para confirmar que `isMeeting()` e `buildCopilotPromptContext()`
+não travam com ele — evita gastar uma chamada real à OpenAI em produção só
+para descobrir um bug de payload no próprio script de teste.
+
+**Ainda depende de verificação manual do Gustavo**: rodar
+`npm run validate:production` (ou `bash scripts/production-validation.sh`)
+com `TEST_USER_EMAIL`/`TEST_USER_PASSWORD` como variáveis de ambiente, e
+colar de volta a saída (nenhum valor sensível aparece nela) para eu
+interpretar o resultado e fechar o relatório final dos 12 itens.
+
+**Nota de segurança desta etapa**: a senha da conta de teste foi colada
+originalmente no chat pelo Gustavo (não deveria — reforcei isso na hora).
+Recomendação: trocar essa senha (ou apagar esse usuário de teste) no
+Supabase Dashboard assim que a validação terminar.
