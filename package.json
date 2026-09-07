@@ -9,7 +9,8 @@
     "build:api": "tsc --noEmit -p tsconfig.server.json",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:copilot": "tsx scripts/test-copilot.ts"
+    "test:copilot": "tsx scripts/test-copilot.ts",
+    "validate:production": "bash scripts/production-validation.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
